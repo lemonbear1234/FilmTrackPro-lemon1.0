@@ -515,6 +515,60 @@ export class MovieDAO {
   }
 
   /**
+   * 更新作品的补充信息（详情页「详细信息」卡片里可编辑的字段）
+   * 只改动这 5 个字段，不触发 updateMovie 里的进度/日期联动，避免副作用
+   */
+  static async updateMovieExtraInfo(
+    id: string,
+    patch: {
+      created_at?: string | null
+      total_seasons?: number | null
+      total_episodes?: number | null
+      runtime?: number | null
+      tmdb_id?: number | null
+    }
+  ): Promise<ApiResponse<Movie>> {
+    try {
+      const db = await DatabaseConnection.getInstance()
+      const timestamp = await DatabaseUtils.getCurrentTimestamp()
+
+      const existing = await db.select('SELECT * FROM movies WHERE id = $1', [id]) as MovieRow[]
+      if (existing.length === 0) {
+        return { success: false, error: '电影不存在' }
+      }
+      const current = existing[0]
+
+      // undefined 表示「不修改」，null 表示「清空」
+      const nextCreatedAt = patch.created_at !== undefined ? patch.created_at : current.created_at
+      const nextTotalSeasons = patch.total_seasons !== undefined ? patch.total_seasons : current.total_seasons
+      const nextTotalEpisodes = patch.total_episodes !== undefined ? patch.total_episodes : current.total_episodes
+      const nextRuntime = patch.runtime !== undefined ? patch.runtime : current.runtime
+      const nextTmdbId = patch.tmdb_id !== undefined ? patch.tmdb_id : current.tmdb_id
+
+      await db.execute(
+        `UPDATE movies SET
+          created_at = $1, total_seasons = $2, total_episodes = $3, runtime = $4, tmdb_id = $5, updated_at = $6
+        WHERE id = $7`,
+        [nextCreatedAt, nextTotalSeasons, nextTotalEpisodes, nextRuntime, nextTmdbId, timestamp, id]
+      )
+
+      const updated = await db.select('SELECT * FROM movies WHERE id = $1', [id]) as MovieRow[]
+      const row = updated[0]
+      return {
+        success: true,
+        data: {
+          ...row,
+          genres: DatabaseUtils.parseJsonField<string[]>(row.genres),
+          tags: DatabaseUtils.parseJsonField<string[]>(row.tags),
+          seasons_data: DatabaseUtils.parseJsonField<SeasonsData>(row.seasons_data)
+        } as Movie
+      }
+    } catch (error) {
+      return { success: false, error: `更新详细信息失败: ${error}` }
+    }
+  }
+
+  /**
    * 删除电影
    * @param movieId 电影ID
    */

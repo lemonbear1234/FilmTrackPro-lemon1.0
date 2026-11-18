@@ -1,6 +1,6 @@
 [package]
 name = "filmtrackpro"
-version = "0.6.0"
+version = "0.6.1"
 description = "影迹 - 追踪您的观影足迹"
 authors = ["yanstu"]
 license = "MIT"

@@ -370,6 +370,34 @@ export const useMovieStore = defineStore('movie', () => {
   };
   
   /**
+   * 更新作品的补充信息（详情页「详细信息」里可编辑的字段）
+   * 只改添加日期 / 总季数 / 总集数 / 时长 / TMDb ID，不触发状态与进度联动
+   */
+  const updateMovieExtraInfo = async (
+    id: string,
+    patch: {
+      created_at?: string | null;
+      total_seasons?: number | null;
+      total_episodes?: number | null;
+      runtime?: number | null;
+      tmdb_id?: number | null;
+    }
+  ): Promise<ApiResponse<ParsedMovie>> => {
+    try {
+      const response = await databaseAPI.updateMovieExtraInfo(id, patch);
+      if (response.success && response.data) {
+        upsertMovieInState(response.data);
+        return { success: true, data: response.data as ParsedMovie };
+      }
+      throw new Error(response.error || '更新详细信息失败');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error('更新详细信息失败:', err);
+      return { success: false, error: errorMessage };
+    }
+  };
+  
+  /**
    * 删除影视作品
    */
   const deleteMovie = async (id: string): Promise<ApiResponse<void>> => {
@@ -848,6 +876,7 @@ export const useMovieStore = defineStore('movie', () => {
     fetchMovieDetail,
     addMovie,
     updateMovie,
+    updateMovieExtraInfo,
     deleteMovie,
     searchTMDb,
     fetchPopularContent,

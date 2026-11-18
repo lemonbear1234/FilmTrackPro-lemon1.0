@@ -15,17 +15,18 @@ const excludes = (source, needle, message) =>
 describe('发布工作流（GitHub Actions / tauri-action）', () => {
   const wf = read('.github/workflows/release.yml')
 
-  it('由 v* 标签触发，并可手动触发', () => {
+  it('由 v* / lemon-* 标签触发，并可手动触发', () => {
     includes(wf, "tags:", '应配置 tag 触发')
     includes(wf, "v*", '应匹配 v* 标签')
+    includes(wf, "lemon-*", '应匹配定制版 lemon-* 标签')
     includes(wf, 'workflow_dispatch', '应支持手动触发')
   })
 
-  it('使用 tauri-action，覆盖 macOS universal 与 Windows', () => {
+  it('使用 tauri-action 构建 Windows NSIS 安装包', () => {
     includes(wf, 'tauri-apps/tauri-action', '应使用官方 tauri-action')
-    includes(wf, 'universal-apple-darwin', 'macOS 应构建 universal 通用包')
-    includes(wf, 'macos-latest', '应包含 macOS runner')
     includes(wf, 'windows-latest', '应包含 Windows runner')
+    includes(wf, '--bundles nsis', '应构建 NSIS 安装包')
+    excludes(wf, 'macos-latest', '定制版只发 Windows，不再跑 macOS runner')
   })
 
   it('具备发布所需权限与 token', () => {

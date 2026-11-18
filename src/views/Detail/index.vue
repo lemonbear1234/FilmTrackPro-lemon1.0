@@ -66,6 +66,7 @@
             @quick-record="openQuickRecord"
             @mark-episode-watched="markEpisodeWatched"
             @update-movie-info="updateMovieInfo"
+            @details-updated="handleDetailsUpdated"
             @delete-record="deleteRecord"
           />
         </div>
@@ -162,6 +163,11 @@ const ambientBackdropUrl = computed<string>(() => {
   }
   return '';
 });
+
+// 详细信息编辑保存后同步详情页状态
+const handleDetailsUpdated = (movie: Movie) => {
+  detailState.value.movie = movie;
+};
 
 // 一体式快速记录弹窗
 const quickRecordVisible = ref(false);

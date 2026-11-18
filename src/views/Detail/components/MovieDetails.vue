@@ -1,6 +1,18 @@
 <template>
   <div class="card p-6">
-    <h3 class="text-lg font-semibold text-gray-900 mb-4">详细信息</h3>
+    <div class="mb-4 flex items-center justify-between">
+      <h3 class="text-lg font-semibold text-gray-900">详细信息</h3>
+      <button
+        type="button"
+        class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
+        title="修改详细信息"
+        @click="editOpen = true"
+      >
+        <Pencil class="h-3.5 w-3.5" />
+        编辑
+      </button>
+    </div>
+
     <div class="space-y-3 text-sm">
       <div class="flex justify-between">
         <span class="text-gray-600">添加日期</span>
@@ -26,15 +38,56 @@
         </a>
       </div>
     </div>
+
+    <MovieDetailsEditModal
+      :is-open="editOpen"
+      :movie="movie"
+      :saving="saving"
+      @close="editOpen = false"
+      @save="handleSave"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import type { Movie } from '../../../types';
+import { ref } from 'vue';
+import { Pencil } from 'lucide-vue-next';
+import MovieDetailsEditModal from './MovieDetailsEditModal.vue';
+import { useMovieStore } from '../../../stores/movie';
+import { toast } from '../../../utils/toast';
 
-import type { DetailPropsWithFormat } from '../types';
+import type { Movie } from '../../../types';
+import type { DetailPropsWithFormat, MovieDetailsExtraPatch } from '../types';
 
 type Props = DetailPropsWithFormat;
 
-defineProps<Props>();
+const props = defineProps<Props>();
+
+const emit = defineEmits<{
+  (e: 'updated', movie: Movie): void;
+}>();
+
+const movieStore = useMovieStore();
+const editOpen = ref(false);
+const saving = ref(false);
+
+const handleSave = async (patch: MovieDetailsExtraPatch) => {
+  if (!props.movie || saving.value) return;
+
+  saving.value = true;
+  try {
+    const result = await movieStore.updateMovieExtraInfo(props.movie.id, patch);
+    if (result.success && result.data) {
+      emit('updated', result.data as Movie);
+      editOpen.value = false;
+      toast.success('详细信息已更新');
+    } else {
+      toast.error(result.error || '更新失败，请稍后重试');
+    }
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '更新失败，请稍后重试');
+  } finally {
+    saving.value = false;
+  }
+};
 </script>

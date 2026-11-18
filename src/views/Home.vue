@@ -26,7 +26,7 @@
           <span class="text-xs text-gray-400">按真实观看时间统计</span>
         </div>
 
-        <div v-if="loadingStats" class="grid gap-4 sm:gap-5 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]">
+        <div v-if="loadingStats" class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
           <div v-for="i in 8" :key="`stat-sk-${i}`" class="stats-card stats-card-blue">
             <div class="stats-card-content gap-3">
               <Skeleton variant="circle" />
@@ -47,7 +47,7 @@
           @action="loadStatistics"
         />
 
-        <div v-else class="grid gap-4 sm:gap-5 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]">
+        <div v-else class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
           <div class="stats-card stats-card-blue">
             <div class="stats-card-content">
               <div class="stats-card-icon-wrap"><FilmIcon class="stats-card-icon" /></div>

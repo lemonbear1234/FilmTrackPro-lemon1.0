@@ -15,6 +15,15 @@ export interface DetailState {
   currentBackdropIndex: number;
 }
 
+/** 详情页「详细信息」卡片里可编辑的字段 */
+export interface MovieDetailsExtraPatch {
+  created_at?: string | null;
+  total_seasons?: number | null;
+  total_episodes?: number | null;
+  runtime?: number | null;
+  tmdb_id?: number | null;
+}
+
 export interface ModalState {
   editModalVisible: boolean;
   posterPreviewVisible: boolean;
@@ -91,6 +100,7 @@ export interface DetailSidebarEmits {
   (e: 'quickRecord'): void;
   (e: 'markEpisodeWatched'): void;
   (e: 'updateMovieInfo'): void;
+  (e: 'detailsUpdated', movie: Movie): void;
   (e: 'deleteRecord'): void;
 }
 

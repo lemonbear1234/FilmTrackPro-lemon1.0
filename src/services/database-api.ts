@@ -103,6 +103,22 @@ export class DatabaseApiService {
   static async updateMovie(movie: UpdateMovieForm): Promise<ApiResponse<Movie>> {
     return MovieDAO.updateMovie(movie);
   }
+
+  /**
+   * 更新作品的补充信息（添加日期 / 总季数 / 总集数 / 时长 / TMDb ID）
+   */
+  static async updateMovieExtraInfo(
+    id: string,
+    patch: {
+      created_at?: string | null;
+      total_seasons?: number | null;
+      total_episodes?: number | null;
+      runtime?: number | null;
+      tmdb_id?: number | null;
+    }
+  ): Promise<ApiResponse<Movie>> {
+    return MovieDAO.updateMovieExtraInfo(id, patch);
+  }
   
   /**
    * 删除电影
@@ -280,6 +296,7 @@ export const databaseAPI = {
   countMovies: DatabaseApiService.countMovies,
   addMovie: DatabaseApiService.addMovie,
   updateMovie: DatabaseApiService.updateMovie,
+  updateMovieExtraInfo: DatabaseApiService.updateMovieExtraInfo,
   deleteMovie: DatabaseApiService.deleteMovie,
   getMovieById: DatabaseApiService.getMovieById,
   // 观看历史相关API

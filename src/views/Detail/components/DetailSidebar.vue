@@ -25,6 +25,7 @@
       <MovieDetails
         :movie="movie"
         :format-date="formatDate"
+        @updated="$emit('detailsUpdated', $event)"
       />
     </div>
 

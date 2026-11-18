@@ -27,11 +27,16 @@ const expectExcludes = (source, needle, message) => {
 describe('首页 Home.vue 流式自适应栅格', () => {
   const home = read('src/views/Home.vue')
 
-  it('统计概览使用 auto-fit 流式栅格，而不是阶梯硬断点', () => {
+  it('统计概览固定 4 列、两行排列（窄屏 2 列）', () => {
     expectIncludes(
       home,
+      'grid grid-cols-2 lg:grid-cols-4',
+      '统计卡片应为 4 列两行布局'
+    )
+    expectExcludes(
+      home,
       '[grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]',
-      '统计卡片应使用 auto-fit 流式栅格'
+      '统计卡片不再使用 auto-fit，避免最后一张单独换行'
     )
     expectExcludes(home, 'sm:grid-cols-3 lg:grid-cols-5', '统计卡片不应再使用旧的硬断点列数')
   })
