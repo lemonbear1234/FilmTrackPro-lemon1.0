@@ -213,7 +213,15 @@ export class DatabaseApiService {
   static async getDetailedStatistics(): Promise<ApiResponse<DetailedStatistics>> {
     return StatisticsDAO.getDetailedStatistics();
   }
+
+  /**
+   * 获取每部作品的全部真实观看日期（影视库观看时间筛选用）
+   */
+  static async getAllWatchDates(): Promise<ApiResponse<Record<string, string[]>>> {
+    return StatisticsDAO.getAllWatchDates();
+  }
   
+
   /**
    * 开始事务
    */
@@ -287,6 +295,7 @@ export const databaseAPI = {
   // 其他API
   getStatistics: DatabaseApiService.getStatistics,
   getDetailedStatistics: DatabaseApiService.getDetailedStatistics,
+  getAllWatchDates: DatabaseApiService.getAllWatchDates,
   beginTransaction: DatabaseApiService.beginTransaction,
   commitTransaction: DatabaseApiService.commitTransaction,
   rollbackTransaction: DatabaseApiService.rollbackTransaction

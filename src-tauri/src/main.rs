@@ -9,8 +9,6 @@ use filmtrackpro_lib::{
     services::{CacheService, StorageService, UpdateService, UpdateCheckResult},
     config::{AppConfig, ConfigManager, WindowConfig}
 };
-mod stream_proxy;
-use stream_proxy::{get_stream_proxy_base_url, start_stream_proxy_server};
 
 fn sanitize_window_size(width: u32, height: u32, min_width: u32, min_height: u32) -> (u32, u32) {
     let safe_min_width = min_width.max(800);
@@ -503,13 +501,9 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
-            let stream_proxy_state = start_stream_proxy_server()?;
-            app.manage(stream_proxy_state);
-
             // 加载配置
             if let Err(error) = ConfigManager::load(&app.app_handle()) {
                 eprintln!("加载配置失败: {}", error);
@@ -808,7 +802,6 @@ pub fn run() {
             open_installer,
             is_update_downloaded,
             open_download_url,
-            get_stream_proxy_base_url,
             exit_app,
             get_window_config,
             update_window_config,

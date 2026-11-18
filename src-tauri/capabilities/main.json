@@ -44,20 +44,6 @@
     "fs:allow-appconfig-write-recursive",
     "fs:allow-download-write",
     "fs:allow-download-write-recursive",
-    {
-      "identifier": "http:default",
-      "allow": [
-        {
-          "url": "https://umami.yanstu.cn/api/send"
-        },
-        {
-          "url": "https://*"
-        },
-        {
-          "url": "http://*"
-        }
-      ]
-    },
     "shell:allow-open",
     "notification:default",
     "notification:allow-is-permission-granted",

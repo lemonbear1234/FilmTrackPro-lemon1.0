@@ -104,96 +104,6 @@
             </div>
           </section>
 
-          <section v-else-if="activeSection === 'video'">
-            <div class="setting-section">
-              <h3 class="setting-section-title">片单偏好</h3>
-              <div class="setting-item setting-item-stack">
-                <div class="setting-item-info">
-                  <div class="setting-item-label">默认片单</div>
-                  <div class="setting-item-description">选择平时优先用于匹配片源的片单</div>
-                </div>
-                <div class="w-full max-w-md">
-                  <HeadlessSelect
-                    :model-value="settings.videoSource.activeProfileId"
-                    :options="sourceProfileOptions"
-                    placeholder="选择片单"
-                    @update:model-value="settings.videoSource.activeProfileId = String($event)"
-                  />
-                </div>
-              </div>
-              <p v-if="activeProfileDescription" class="setting-item-description mt-3">
-                {{ activeProfileDescription }}
-              </p>
-              <div v-if="props.sourceProfilesLoading" class="source-profile-loading mt-3">
-                正在同步片单状态...
-              </div>
-            </div>
-
-            <div class="setting-section">
-              <h3 class="setting-section-title">播放偏好</h3>
-
-              <div class="setting-item">
-                <div class="setting-item-info">
-                  <div class="setting-item-label">优先自动选更合适的片源</div>
-                  <div class="setting-item-description">匹配完成后自动优先选择更清晰、更新更完整的候选</div>
-                </div>
-                <ToggleSwitch v-model="settings.videoSource.autoSelectBestSource" />
-              </div>
-
-              <div class="setting-item">
-                <div class="setting-item-info">
-                  <div class="setting-item-label">优先沿用手动选过的片源</div>
-                  <div class="setting-item-description">同一部作品再次打开时，优先回到你上次确认过的片源和剧集</div>
-                </div>
-                <ToggleSwitch v-model="settings.videoSource.preferManualSource" />
-              </div>
-
-              <div class="setting-item">
-                <div class="setting-item-info">
-                  <div class="setting-item-label">自动续播上次进度</div>
-                  <div class="setting-item-description">重新打开剧集时，从你上次看到的位置继续</div>
-                </div>
-                <ToggleSwitch v-model="settings.videoSource.resumePlayback" />
-              </div>
-
-              <div class="setting-item setting-item-stack">
-                <div class="setting-item-info">
-                  <div class="setting-item-label">自动匹配策略</div>
-                  <div class="setting-item-description">根据偏好更重视清晰度、更新完整度或两者平衡</div>
-                </div>
-                <div class="w-full max-w-md">
-                  <HeadlessSelect
-                    :model-value="settings.videoSource.qualityPriority"
-                    :options="qualityPriorityOptions"
-                    placeholder="选择匹配策略"
-                    @update:model-value="settings.videoSource.qualityPriority = $event as AppSettings['videoSource']['qualityPriority']"
-                  />
-                </div>
-              </div>
-
-              <div class="setting-item setting-item-stack">
-                <div class="setting-item-info">
-                  <div class="setting-item-label">默认在线播放线路</div>
-                  <div class="setting-item-description">详情页会优先尝试这条线路；没有命中时自动切到当前片源里可用的线路</div>
-                </div>
-                <div class="w-full max-w-md space-y-3">
-                  <HeadlessSelect
-                    :model-value="preferredLineOptions.some(item => item.value === settings.videoSource.preferredLineName) ? settings.videoSource.preferredLineName : 'custom'"
-                    :options="[...preferredLineOptions, { value: 'custom', label: '按线路名匹配' }]"
-                    placeholder="选择默认线路"
-                    @update:model-value="handlePreferredLinePresetChange"
-                  />
-                  <TextField
-                    v-if="!preferredLineOptions.some(item => item.value === settings.videoSource.preferredLineName) && settings.videoSource.preferredLineName !== 'auto'"
-                    :model-value="settings.videoSource.preferredLineName"
-                    placeholder="例如：量子、暴风、非凡"
-                    @update:model-value="settings.videoSource.preferredLineName = String($event).trim()"
-                  />
-                </div>
-              </div>
-            </div>
-          </section>
-
           <section v-else-if="activeSection === 'storage'">
             <div class="setting-section">
               <h3 class="setting-section-title">存储信息</h3>
@@ -267,19 +177,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 import Modal from './Modal.vue';
-import HeadlessSelect from './HeadlessSelect.vue';
-import TextField from './TextField.vue';
 import ToggleSwitch from './ToggleSwitch.vue';
 import StorageService, { StorageKey } from '../../utils/storage';
 import { DEFAULT_APP_SETTINGS, mergeAppSettings } from '../../utils/appSettings';
 
 import type { SettingsModalProps, SettingsModalEmits } from './types';
 import type { AppSettings, ModalType } from '../../types';
-import type { Option } from './types';
 
 type Props = SettingsModalProps;
 type Emits = SettingsModalEmits;
@@ -314,7 +221,7 @@ const emit = defineEmits<Emits>();
 
 // 响应式状态
 const settings = ref<AppSettings>(mergeAppSettings());
-const activeSection = ref<'general' | 'video' | 'storage' | 'danger'>('general');
+const activeSection = ref<'general' | 'storage' | 'danger'>('general');
 
 const isClearing = ref(false);
 
@@ -328,11 +235,6 @@ const sections = [
     description: '应用行为与基础设置'
   },
   {
-    id: 'video',
-    label: '播放',
-    description: '片单与续播偏好'
-  },
-  {
     id: 'storage',
     label: '存储',
     description: '缓存与数据库空间'
@@ -343,45 +245,6 @@ const sections = [
     description: '清理缓存或重置本地数据'
   }
 ] as const;
-
-const sourceProfileOptions = computed(() => {
-  const profiles = props.sourceProfiles || [];
-  // 全部片单都列出，可用的排在前面并标注「N 条可用」，不可用的标注「当前不可用」沉底，
-  // 既保留可见性、又一眼能看出哪些真正能用。
-  return [...profiles]
-    .sort((a, b) => Number(b.available) - Number(a.available) || b.sourceCount - a.sourceCount)
-    .map((item) => ({
-      value: item.id,
-      label: item.available
-        ? `${item.name} · ${item.sourceCount} 条可用`
-        : (props.sourceProfilesLoading ? `${item.name} · 检测中…` : `${item.name} · 当前不可用`)
-    }));
-});
-
-const activeProfileDescription = computed(() => {
-  const activeProfile = (props.sourceProfiles || []).find((item) => item.id === settings.value.videoSource.activeProfileId);
-  if (!activeProfile) {
-    return '';
-  }
-
-  if (activeProfile.available) {
-    return `${activeProfile.name} 当前可用，已整理出 ${activeProfile.sourceCount} 条 API 线路。`;
-  }
-
-  return `${activeProfile.name} 当前未响应，可切换到其他片单继续匹配。`;
-});
-
-const qualityPriorityOptions: Option[] = [
-  { value: 'balanced', label: '画质与更新平衡' },
-  { value: 'quality', label: '优先更清晰片源' },
-  { value: 'update', label: '优先更新更完整' }
-];
-
-const preferredLineOptions: Option[] = [
-  { value: 'auto', label: '自动选择更合适的线路' },
-  { value: '暴风', label: '优先暴风线路' },
-  { value: '量子', label: '优先量子线路' }
-];
 
 // 确认对话框
 const confirmDialog = ref({
@@ -513,18 +376,6 @@ const loadSettings = async () => {
     console.error('加载设置失败:', error);
     settings.value = mergeAppSettings();
   }
-};
-
-const handlePreferredLinePresetChange = (value: string | number) => {
-  const nextValue = String(value);
-  if (nextValue === 'custom') {
-    if (preferredLineOptions.some(item => item.value === settings.value.videoSource.preferredLineName)) {
-      settings.value.videoSource.preferredLineName = '';
-    }
-    return;
-  }
-
-  settings.value.videoSource.preferredLineName = nextValue;
 };
 
 const loadAppVersion = async () => {

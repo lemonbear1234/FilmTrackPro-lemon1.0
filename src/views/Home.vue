@@ -76,28 +76,56 @@
             </div>
           </div>
 
-          <div class="stats-card stats-card-indigo">
+          <div
+            class="stats-card stats-card-indigo stats-card-clickable"
+            role="button"
+            tabindex="0"
+            title="查看本月观看的电影"
+            @click="navigateToLibrary('this-month', 'movie')"
+            @keydown.enter="navigateToLibrary('this-month', 'movie')"
+          >
             <div class="stats-card-content">
               <div class="stats-card-icon-wrap"><CalendarIcon class="stats-card-icon" /></div>
               <div><p class="stats-card-label">本月电影</p><p class="stats-card-value">{{ animatedMonthMovie }}</p></div>
             </div>
           </div>
 
-          <div class="stats-card stats-card-green">
+          <div
+            class="stats-card stats-card-green stats-card-clickable"
+            role="button"
+            tabindex="0"
+            title="查看本月观看的剧集"
+            @click="navigateToLibrary('this-month', 'tv')"
+            @keydown.enter="navigateToLibrary('this-month', 'tv')"
+          >
             <div class="stats-card-content">
               <div class="stats-card-icon-wrap"><CheckCircleIcon class="stats-card-icon" /></div>
               <div><p class="stats-card-label">本月剧集</p><p class="stats-card-value">{{ animatedMonthTv }}</p></div>
             </div>
           </div>
 
-          <div class="stats-card stats-card-pink">
+          <div
+            class="stats-card stats-card-pink stats-card-clickable"
+            role="button"
+            tabindex="0"
+            title="查看本年观看的电影"
+            @click="navigateToLibrary('this-year', 'movie')"
+            @keydown.enter="navigateToLibrary('this-year', 'movie')"
+          >
             <div class="stats-card-content">
               <div class="stats-card-icon-wrap"><TrendingUpIcon class="stats-card-icon" /></div>
               <div><p class="stats-card-label">本年电影</p><p class="stats-card-value">{{ animatedYearMovie }}</p></div>
             </div>
           </div>
 
-          <div class="stats-card stats-card-orange">
+          <div
+            class="stats-card stats-card-orange stats-card-clickable"
+            role="button"
+            tabindex="0"
+            title="查看本年观看的剧集"
+            @click="navigateToLibrary('this-year', 'tv')"
+            @keydown.enter="navigateToLibrary('this-year', 'tv')"
+          >
             <div class="stats-card-content">
               <div class="stats-card-icon-wrap"><CalendarIcon class="stats-card-icon" /></div>
               <div><p class="stats-card-label">本年剧集</p><p class="stats-card-value">{{ animatedYearTv }}</p></div>
@@ -454,6 +482,14 @@ import { useHomeData } from './Home/composables/useHomeData'
 const router = useRouter()
 const navigateToRecord = () => router.push('/record')
 
+// 统计卡片跳转到影视库，并带上观看时间 + 类型筛选
+const navigateToLibrary = (watchTime: 'this-month' | 'this-year', type: 'movie' | 'tv') => {
+  router.push({
+    name: 'Library',
+    query: { watchTime, type }
+  })
+}
+
 const {
   movieStore,
   loadingStats,
@@ -747,6 +783,16 @@ onMounted(() => {
 
 .stats-card:hover::after {
   opacity: 1;
+}
+
+/* 可点击统计卡（本月/本年电影/剧集）：跳转到影视库对应筛选 */
+.stats-card-clickable {
+  cursor: pointer;
+}
+
+.stats-card-clickable:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.7);
+  outline-offset: 2px;
 }
 
 .stats-card-content {

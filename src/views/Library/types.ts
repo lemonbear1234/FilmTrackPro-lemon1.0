@@ -104,6 +104,10 @@ export interface LibraryHeaderProps {
   searchQuery: string;
   selectedType: string;
   selectedStatus: string;
+  selectedWatchTime: string;
+  selectedReleaseYear: string;
+  watchTimeOptions: { value: string; label: string }[];
+  releaseYearOptions: { value: string; label: string }[];
   viewMode: ViewMode;
   isSelectionMode: boolean;
   selectedCount: number;
@@ -115,6 +119,8 @@ export interface LibraryHeaderEmits {
   (e: 'update:searchQuery', value: string): void;
   (e: 'update:selectedType', value: string | number): void;
   (e: 'update:selectedStatus', value: string | number): void;
+  (e: 'update:selectedWatchTime', value: string | number): void;
+  (e: 'update:selectedReleaseYear', value: string | number): void;
   (e: 'changeViewMode', mode: ViewMode): void;
   (e: 'enableSelection'): void;
   (e: 'cancelSelection'): void;

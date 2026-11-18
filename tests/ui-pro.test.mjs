@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, it } from 'node:test'
 
@@ -34,27 +34,22 @@ describe('日期选择器 Teleport 不被弹窗裁切', () => {
   })
 })
 
-describe('片源/线路：详情页隐藏 / 设置弹窗承担默认（后续反转决策）', () => {
-  const panel = read('src/views/Detail/components/DetailPlayerPanel.vue')
+describe('在线播放功能已整体移除', () => {
   const settings = read('src/components/ui/SettingsModal.vue')
+  const detail = read('src/views/Detail/index.vue')
 
-  it('详情页不暴露片源/线路 UI（减少新手心智，统一走设置）', () => {
-    excludes(panel, 'handleSelectSource', '详情页不应再有片源选择 handler')
-    excludes(panel, 'handleSelectLine', '详情页不应再有线路选择 handler')
-    excludes(panel, 'placeholder="选择片源"', '详情页不应再有"选择片源"下拉')
-    excludes(panel, 'placeholder="选择线路"', '详情页不应再有"选择线路"下拉')
+  it('播放面板组件文件已删除', () => {
+    assert.ok(
+      !existsSync(fileURLToPath(new URL('../src/views/Detail/components/DetailPlayerPanel.vue', import.meta.url))),
+      '播放面板文件应已删除'
+    )
   })
 
-  it('错误态保留"去设置换源"作为高级用户出口', () => {
-    includes(panel, 'openPlaybackSettings', '应保留跳设置入口')
-    includes(panel, "section: 'video'", '应跳到设置的"播放"区')
-  })
-
-  it('设置弹窗的"播放"区承担默认片单 / 默认线路 / 续播 / 自动选源等', () => {
-    includes(settings, '默认片单', '应保留默认片单设置')
-    includes(settings, '默认在线播放线路', '应保留默认线路设置')
-    excludes(settings, '当前影片', '设置不应有按影片选片源/线路')
-    excludes(settings, 'select-detail-source', '设置不应再发按影片选片源事件')
+  it('详情页与设置弹窗均不再有播放 / 片源配置', () => {
+    excludes(detail, 'DetailPlayerPanel', '详情页不应再引用播放面板')
+    excludes(settings, "activeSection === 'video'", '设置不应再有播放区')
+    excludes(settings, '默认片单', '设置不应再有片单配置')
+    excludes(settings, '默认在线播放线路', '设置不应再有播放线路配置')
   })
 })
 

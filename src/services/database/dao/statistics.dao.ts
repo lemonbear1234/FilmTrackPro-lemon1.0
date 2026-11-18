@@ -56,6 +56,32 @@ const toNumber = (value: unknown): number => {
 
 export class StatisticsDAO {
   /** 获取核心统计数据（首页统计卡片用） */
+  /**
+   * 获取每部作品的全部真实观看日期（主记录 + 重刷，按作品+自然日去重）。
+   * 供影视库「观看时间」筛选使用：key 为 movie_id，value 为 YYYY-MM-DD 日期数组。
+   */
+  static async getAllWatchDates(): Promise<ApiResponse<Record<string, string[]>>> {
+    try {
+      const db = await DatabaseConnection.getInstance()
+      const sql = `${WATCH_EVENTS_CTE}
+        SELECT movie_id, watch_day
+        FROM distinct_events
+        ORDER BY watch_day`
+      const rows = await db.select(sql) as DatabaseRow[]
+      const result: Record<string, string[]> = {}
+      for (const row of rows) {
+        const id = String(row.movie_id ?? '')
+        const day = String(row.watch_day ?? '')
+        if (!id || !day) continue
+        if (!result[id]) result[id] = []
+        result[id].push(day)
+      }
+      return { success: true, data: result }
+    } catch (error) {
+      return { success: false, error: `获取观看日期失败: ${error}` }
+    }
+  }
+
   static async getStatistics(): Promise<ApiResponse<Statistics>> {
     try {
       const db = await DatabaseConnection.getInstance()

@@ -3,12 +3,8 @@
  */
 
 import type {
-  MatchResponsePayload,
   Movie,
-  ModalType,
-  MoviePlaybackProgress,
-  SourceProfileSummary,
-  VideoDetail
+  ModalType
 } from '../../types';
 import type { WatchTimelineItem } from '../../utils/watchInsights';
 
@@ -124,13 +120,6 @@ export interface DetailModalsEmits {
   (e: 'saveRecord', movie: Movie): void;
 }
 
-// DetailPlayerPanel 组件类型（封面下方独立全宽播放区）
-export interface DetailPlayerPanelProps {
-  movie: Movie;
-  playerState: PlayerPanelState;
-  playerActions: PlayerPanelActions;
-}
-
 // DetailContent 组件类型（主内容列：简介 / 观看轨迹 / 重刷记录）
 export interface DetailContentProps {
   movie: Movie;
@@ -176,42 +165,4 @@ export interface ActionButtonsEmits {
 // DeleteSection 组件类型
 export interface DeleteSectionEmits {
   (e: 'deleteRecord'): void;
-}
-
-export interface PlayerPanelState {
-  isLoadingProfiles: boolean;
-  isMatchingSources: boolean;
-  isLoadingDetail: boolean;
-  isResolvingStream: boolean;
-  isSwitchingCandidate: boolean;
-  profiles: SourceProfileSummary[];
-  sourceSummary: MatchResponsePayload | null;
-  videoDetail: VideoDetail | null;
-  selectedSourceKey: string | null;
-  selectedGroupName: string | null;
-  selectedEpisodeUrl: string | null;
-  selectedStreamUrl: string;
-  selectedStreamContentType: string;
-  selectedStreamHeaders: Record<string, string>;
-  selectedEpisodeName: string;
-  latestProgress: MoviePlaybackProgress | null;
-  episodeProgress: MoviePlaybackProgress | null;
-  errorMessage: string;
-  /** 自动回退中（依次尝试线路 / 片源），用于区分「过渡态」与「终态错误」 */
-  isAutoRecovering: boolean;
-  /** 重试令牌：递增以强制播放器重新挂载并重新拉流（即使地址相同） */
-  playbackReloadToken: number;
-}
-
-export interface PlayerPanelActions {
-  reloadProfiles: () => Promise<void>;
-  matchSources: (force?: boolean) => Promise<void>;
-  selectCandidate: (sourceKey: string, vodId: string, selectionMode?: 'auto' | 'manual') => Promise<void>;
-  selectGroup: (groupName: string) => Promise<void>;
-  selectEpisode: (episodeUrl: string, episodeName?: string, selectionMode?: 'auto' | 'manual') => Promise<void>;
-  saveProgress: (payload: { positionSeconds: number; durationSeconds: number; playbackRate: number; completed: boolean }) => Promise<void>;
-  openExternal: () => Promise<void>;
-  handlePlaybackFailure: (message: string) => Promise<void>;
-  /** 就地重试当前剧集（重新拉流并强制重挂播放器）；无选集时回退为重新匹配 */
-  retryPlayback: () => Promise<void>;
 }

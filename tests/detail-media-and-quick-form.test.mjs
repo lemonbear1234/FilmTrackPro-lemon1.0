@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, it } from 'node:test'
 
@@ -130,29 +130,34 @@ describe('CSP 不再为已移除的 YouTube iframe 放行（同步回滚）', ()
   })
 })
 
-describe('详情页隐藏「片源 / 线路」UI（减少新手心智，统一走设置 → 播放）', () => {
-  const panel = read('src/views/Detail/components/DetailPlayerPanel.vue')
+describe('在线播放功能已整体移除', () => {
+  const abs = (p) => fileURLToPath(new URL(`../${p}`, import.meta.url))
 
-  it('详情页不再渲染 sourceOptions / lineOptions 两个 select', () => {
-    excludes(panel, 'player-source-grid', '不应再保留片源/线路网格容器')
-    excludes(panel, 'player-source-field', '不应再保留片源/线路字段容器')
-    excludes(panel, 'placeholder="选择片源"', '不应再渲染"选择片源"下拉')
-    excludes(panel, 'placeholder="选择线路"', '不应再渲染"选择线路"下拉')
+  it('播放组件 / composable / 服务文件均已删除', () => {
+    const removed = [
+      'src/views/Detail/components/DetailPlayerPanel.vue',
+      'src/views/Detail/components/PlyrPlayer.vue',
+      'src/views/Detail/composables/useDetailPlayer.ts',
+      'src/views/Detail/playbackFallback.ts',
+      'src/views/Detail/playbackCandidate.ts',
+      'src/services/video-source.ts',
+      'src-tauri/src/stream_proxy.rs'
+    ]
+    for (const p of removed) {
+      assert.ok(!existsSync(abs(p)), `播放文件应已删除: ${p}`)
+    }
   })
 
-  it('对应的 import / handler / disabled 计算也一并清理', () => {
-    excludes(panel, "import HeadlessSelect from", '不应再导入 HeadlessSelect')
-    excludes(panel, 'handleSelectSource', '不应再保留片源选择 handler')
-    excludes(panel, 'handleSelectLine', '不应再保留线路选择 handler')
-    excludes(panel, 'sourceSelectDisabled', '不应再保留片源禁用计算')
-    excludes(panel, 'lineSelectDisabled', '不应再保留线路禁用计算')
-    excludes(panel, 'sourceOptions', '不应再保留 sourceOptions')
-    excludes(panel, 'lineOptions', '不应再保留 lineOptions')
+  it('详情页不再引用在线播放面板', () => {
+    const detail = read('src/views/Detail/index.vue')
+    excludes(detail, 'DetailPlayerPanel', '详情页不应再引用播放面板')
+    excludes(detail, 'useDetailPlayer', '详情页不应再引用播放 composable')
   })
 
-  it('错误态保留"去设置换源"入口作为高级用户出口', () => {
-    includes(panel, 'openPlaybackSettings', '错误态应有跳设置入口')
-    includes(panel, "section: 'video'", '应跳到设置的"播放"区')
+  it('设置弹窗不再有播放配置区', () => {
+    const settings = read('src/components/ui/SettingsModal.vue')
+    excludes(settings, "activeSection === 'video'", '设置不应再有播放区')
+    excludes(settings, '默认在线播放线路', '设置不应再有播放线路配置')
   })
 })
 

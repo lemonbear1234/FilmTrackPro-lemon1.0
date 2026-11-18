@@ -63,8 +63,6 @@
         :is-open="settingsVisible"
         :is-checking-update="isCheckingUpdate"
         :update-check-notice="updateCheckNotice"
-        :source-profiles="sourceProfiles"
-        :source-profiles-loading="sourceProfilesLoading"
         :initial-section="initialSettingsSection"
         @close="settingsVisible = false"
         @save="handleSettingsSave"
@@ -101,9 +99,8 @@ import ContextMenu from './components/common/ContextMenu.vue';
 import ShortcutsHelp from './components/common/ShortcutsHelp.vue';
 import Modal from './components/ui/Modal.vue';
 import { useShortcuts } from './composables/useShortcuts';
-import type { UpdateCheckResult, AppSettings, UpdateCheckNotice, SourceProfileSummary } from './types';
+import type { UpdateCheckResult, AppSettings, UpdateCheckNotice } from './types';
 import type { SettingsSectionId } from './components/ui/types';
-import { getSourceProfiles, whenSourceProfilesRefreshed } from './services/video-source';
 
 const SettingsModal = defineAsyncComponent({
   loader: () => import('./components/ui/SettingsModal.vue'),
@@ -215,8 +212,6 @@ const updateModalVisible = ref(false);
 const updateInfo = ref<UpdateCheckResult | null>(null);
 const isCheckingUpdate = ref(false);
 const updateCheckNotice = ref<UpdateCheckNotice | null>(null);
-const sourceProfiles = ref<SourceProfileSummary[]>([]);
-const sourceProfilesLoading = ref(false);
 let unlistenNavigateToRecord: (() => void) | null = null;
 let unlistenTriggerCheckUpdate: (() => void) | null = null;
 let updateService: null | {
@@ -234,7 +229,6 @@ const handleOpenSettings = (event?: Event) => {
   const section = (event as CustomEvent<{ section?: SettingsSectionId }> | undefined)?.detail?.section;
   initialSettingsSection.value = section ?? 'general';
   settingsVisible.value = true;
-  void loadSourceProfiles();
 };
 
 const handleModalClose = () => {
@@ -344,35 +338,6 @@ const handleCheckForUpdate = async () => {
     isCheckingUpdate.value = false;
   }
 };
-
-const loadSourceProfiles = async () => {
-  sourceProfilesLoading.value = true;
-  try {
-    const response = await getSourceProfiles();
-    sourceProfiles.value = response.items;
-  } catch (error) {
-    console.error('加载片单摘要失败:', error);
-  } finally {
-    sourceProfilesLoading.value = false;
-  }
-
-  // SWR：若上面拿到的是过期 / 骨架数据且后台正在静默刷新，刷新完成后回填，列表原地更新
-  const pendingRefresh = whenSourceProfilesRefreshed();
-  if (pendingRefresh) {
-    sourceProfilesLoading.value = true;
-    try {
-      await pendingRefresh;
-      const refreshed = await getSourceProfiles();
-      sourceProfiles.value = refreshed.items;
-    } catch (error) {
-      console.error('刷新片单摘要失败:', error);
-    } finally {
-      sourceProfilesLoading.value = false;
-    }
-  }
-};
-
-
 
 const openCommandPalette = () => {
   window.dispatchEvent(new CustomEvent('open-command-palette'));

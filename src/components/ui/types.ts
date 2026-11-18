@@ -1,6 +1,6 @@
 // UI组件通用类型定义
 
-import type { Movie, ModalType, AppSettings, SourceProfileSummary, WindowSettings } from '../../types';
+import type { Movie, ModalType, AppSettings, WindowSettings } from '../../types';
 import type { UpdateCheckNotice } from '../../types';
 
 // Modal组件类型
@@ -124,14 +124,12 @@ export interface DateFieldEmits {
   (e: 'blur'): void;
 }
 
-export type SettingsSectionId = 'general' | 'video' | 'storage' | 'danger';
+export type SettingsSectionId = 'general' | 'storage' | 'danger';
 
 export interface SettingsModalProps {
   isOpen: boolean;
   isCheckingUpdate?: boolean;
   updateCheckNotice?: UpdateCheckNotice | null;
-  sourceProfiles?: SourceProfileSummary[];
-  sourceProfilesLoading?: boolean;
   initialSection?: SettingsSectionId;
 }
 

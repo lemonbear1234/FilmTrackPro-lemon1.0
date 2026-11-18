@@ -6,6 +6,10 @@
       :search-query="searchQuery"
       :selected-type="selectedType"
       :selected-status="selectedStatus"
+      :selected-watch-time="selectedWatchTime"
+      :selected-release-year="selectedReleaseYear"
+      :watch-time-options="watchTimeOptions"
+      :release-year-options="releaseYearOptions"
       :view-mode="viewMode"
       :is-selection-mode="isSelectionMode"
       :selected-count="selectedItems.length"
@@ -18,6 +22,8 @@
       @update:search-query="updateSearchQuery"
       @update:selected-type="updateSelectedType"
       @update:selected-status="updateSelectedStatus"
+      @update:selected-watch-time="updateSelectedWatchTime"
+      @update:selected-release-year="updateSelectedReleaseYear"
       />
     </div>
 
@@ -29,7 +35,7 @@
     >
       <div class="max-w-7xl mx-auto pt-6">
         <!-- 搜索统计 -->
-        <div v-if="(searchQuery || selectedType || selectedStatus) && !infiniteScroll.isEmpty.value" class="mb-4">
+        <div v-if="(searchQuery || selectedType || selectedStatus || selectedWatchTime || selectedReleaseYear) && !infiniteScroll.isEmpty.value" class="mb-4">
           <p class="text-sm text-gray-600">
             找到 <span class="font-medium">{{ infiniteScroll.total.value || filteredItems.length }}</span> 个结果
             <span v-if="searchQuery">关于 "<span class="font-medium">{{ searchQuery }}</span>"</span>
@@ -89,7 +95,14 @@ import { useMovieStore } from '../../stores/movie';
 import { useAppStore } from '../../stores/app';
 import { debounce, tmdbAPI } from '../../utils/api';
 import { fuzzySearchAsync } from '../../utils/search';
-import { matchesTypeFilter } from '../../utils/constants';
+import { databaseAPI } from '../../services/database-api';
+import {
+  matchesTypeFilter,
+  matchesWatchTimeFilter,
+  matchesReleaseYearFilter,
+  WATCH_TIME_BASE_OPTIONS,
+  RELEASE_YEAR_BASE_OPTIONS
+} from '../../utils/constants';
 import { useInfiniteScroll, type LoadFunction } from '../../composables/useInfiniteScroll';
 import StorageService, { StorageKey } from '../../utils/storage';
 
@@ -112,10 +125,42 @@ const appStore = useAppStore();
 const searchQuery = ref('');
 const selectedType = ref('');
 const selectedStatus = ref('');
+const selectedWatchTime = ref('');
+const selectedReleaseYear = ref('');
 const viewMode = ref<ViewMode>('grid');
 const allMovies = ref<MovieRecord[]>([]);
 const filteredItemsSource = shallowRef<MovieRecord[]>([]);
+// 每部作品的全部真实观看日期：movieId -> YYYY-MM-DD[]
+const watchDatesByMovie = ref<Record<string, string[]>>({});
 let filterTaskId = 0;
+
+// 动态筛选项：年份从库内数据生成，保证只出现有数据的选项
+const releaseYearOptions = computed(() => {
+  const years = new Set<number>();
+  for (const m of allMovies.value) {
+    if (m.year && m.year > 0) years.add(m.year);
+  }
+  const sorted = [...years].sort((a, b) => b - a);
+  return [
+    ...RELEASE_YEAR_BASE_OPTIONS,
+    ...sorted.map((y) => ({ value: String(y), label: `${y} 年` }))
+  ];
+});
+
+const watchTimeOptions = computed(() => {
+  const years = new Set<number>();
+  for (const dates of Object.values(watchDatesByMovie.value)) {
+    for (const d of dates) {
+      const y = parseInt(d.slice(0, 4), 10);
+      if (y > 0) years.add(y);
+    }
+  }
+  const sorted = [...years].sort((a, b) => b - a);
+  return [
+    ...WATCH_TIME_BASE_OPTIONS,
+    ...sorted.map((y) => ({ value: String(y), label: `${y} 年` }))
+  ];
+});
 
 // 批量选择状态
 const isSelectionMode = ref(false);
@@ -149,6 +194,16 @@ const baseFilteredItems = computed(() => {
   // 按状态筛选
   if (selectedStatus.value) {
     results = results.filter(movie => movie.status === selectedStatus.value);
+  }
+
+  // 按上映时间（年份 / 年代）筛选
+  if (selectedReleaseYear.value) {
+    results = results.filter(movie => matchesReleaseYearFilter(movie.year, selectedReleaseYear.value));
+  }
+
+  // 按观看时间筛选（本月 / 本年 / 去年 / 具体年份）
+  if (selectedWatchTime.value) {
+    results = results.filter(movie => matchesWatchTimeFilter(watchDatesByMovie.value[movie.id], selectedWatchTime.value));
   }
 
   return results;
@@ -187,6 +242,15 @@ const loadMovies: LoadFunction<MovieRecord> = async (page: number, pageSize: num
       const response = await movieStore.fetchMovies();
       if (response?.success) {
         allMovies.value = movieStore.movies;
+      }
+      // 加载真实观看日期用于「观看时间」筛选（失败时退化为空映射，不影响其它筛选）
+      try {
+        const datesRes = await databaseAPI.getAllWatchDates();
+        if (datesRes?.success && datesRes.data) {
+          watchDatesByMovie.value = datesRes.data;
+        }
+      } catch (e) {
+        console.warn('加载观看时间失败:', e);
       }
     }
 
@@ -232,6 +296,14 @@ const updateSelectedType = (value: string) => {
 
 const updateSelectedStatus = (value: string) => {
   selectedStatus.value = value;
+};
+
+const updateSelectedWatchTime = (value: string) => {
+  selectedWatchTime.value = value;
+};
+
+const updateSelectedReleaseYear = (value: string) => {
+  selectedReleaseYear.value = value;
 };
 
 // 导航到详情页
@@ -359,7 +431,7 @@ const executeDelete = async () => {
 };
 
 // 监听筛选条件变化
-watch([selectedType, selectedStatus], () => {
+watch([selectedType, selectedStatus, selectedWatchTime, selectedReleaseYear], () => {
   infiniteScroll.refresh();
 });
 
@@ -373,6 +445,8 @@ const handleClearSearch = () => {
   searchQuery.value = '';
   selectedType.value = '';
   selectedStatus.value = '';
+  selectedWatchTime.value = '';
+  selectedReleaseYear.value = '';
 };
 
 // 初始化
@@ -383,21 +457,31 @@ onMounted(() => {
   window.addEventListener('library-clear-search', handleClearSearch);
 
   // 从查询参数初始化筛选器
-  if (route.query.status) {
-    selectedStatus.value = route.query.status as string;
-  }
-  if (route.query.type) {
-    selectedType.value = route.query.type as string;
-  }
-  if (route.query.query) {
-    searchQuery.value = route.query.query as string;
-  }
+  applyRouteQuery();
 
   // 手动触发初始加载
   nextTick(() => {
     infiniteScroll.triggerLoad();
   });
 });
+
+// 从路由 query 应用筛选（供首页统计卡片跳转等场景复用）
+function applyRouteQuery() {
+  selectedStatus.value = (route.query.status as string) || '';
+  selectedType.value = (route.query.type as string) || '';
+  selectedWatchTime.value = (route.query.watchTime as string) || '';
+  selectedReleaseYear.value = (route.query.year as string) || '';
+  searchQuery.value = (route.query.query as string) || '';
+}
+
+// 同组件不同 query 跳转时（如首页卡片 → 影视库），同步筛选条件
+watch(
+  () => route.query,
+  () => {
+    applyRouteQuery();
+  },
+  { deep: true }
+);
 
 onBeforeUnmount(() => {
   window.removeEventListener('library-clear-search', handleClearSearch);

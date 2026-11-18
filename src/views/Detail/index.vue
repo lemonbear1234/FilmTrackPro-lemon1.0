@@ -49,15 +49,6 @@
 
       <!-- 详细内容区域 -->
       <div class="detail-page-body">
-        <!-- 全宽在线播放区 -->
-        <div class="detail-player-block">
-          <DetailPlayerPanel
-            :movie="detailState.movie"
-            :player-state="playerState"
-            :player-actions="playerActions"
-          />
-        </div>
-
         <!-- 主内容（简介 / 轨迹 / 重刷） + 信息侧栏 -->
         <div class="detail-page-grid">
           <DetailContent
@@ -108,7 +99,6 @@ import { computed, ref } from 'vue';
 import type { Movie } from '../../types';
 // 组件导入
 import DetailHeader from './components/DetailHeader.vue';
-import DetailPlayerPanel from './components/DetailPlayerPanel.vue';
 import DetailContent from './components/DetailContent.vue';
 import DetailSidebar from './components/DetailSidebar.vue';
 import DetailModals from './components/DetailModals.vue';
@@ -117,7 +107,6 @@ import QuickRecordDialog from './components/QuickRecordDialog.vue';
 // Composables 导入
 import { useDetailData } from './composables/useDetailData';
 import { useDetailActions } from './composables/useDetailActions';
-import { useDetailPlayer } from './composables/useDetailPlayer';
 import { useDetailUI } from './composables/useDetailUI';
 import { useDetailUtils } from './composables/useDetailUtils';
 
@@ -138,11 +127,6 @@ const {
   updateMovieInfo,
   handleSaveRecord
 } = useDetailData(showDialog);
-
-const {
-  playerState,
-  playerActions
-} = useDetailPlayer(detailState);
 
 // 操作逻辑
 const {
@@ -277,10 +261,6 @@ const handleQuickSave = async (partial: Partial<Movie>) => {
   padding: 1.5rem 1.5rem 2.5rem;
   position: relative;
   z-index: 1;
-}
-
-.detail-player-block {
-  margin-bottom: 1.5rem;
 }
 
 .detail-page-grid {

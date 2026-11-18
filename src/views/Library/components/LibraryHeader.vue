@@ -75,6 +75,26 @@
             />
           </div>
 
+          <!-- 上映时间筛选 -->
+          <div class="w-36">
+            <HeadlessSelect
+              :model-value="selectedReleaseYear"
+              @update:model-value="$emit('update:selectedReleaseYear', $event)"
+              :options="releaseYearOptions"
+              placeholder="上映时间"
+            />
+          </div>
+
+          <!-- 观看时间筛选 -->
+          <div class="w-36">
+            <HeadlessSelect
+              :model-value="selectedWatchTime"
+              @update:model-value="$emit('update:selectedWatchTime', $event)"
+              :options="watchTimeOptions"
+              placeholder="观看时间"
+            />
+          </div>
+
           <!-- 视图切换 -->
           <div class="flex bg-gray-100/80 backdrop-blur-sm rounded-xl p-1">
             <button

@@ -28,6 +28,60 @@ export const TYPE_OPTIONS = [
   { value: TAG_ANIME_VALUE, label: '动漫' }
 ];
 
+/** 观看时间筛选的固定选项（年份选项在影视库内按数据动态补充） */
+export const WATCH_TIME_BASE_OPTIONS = [
+  { value: '', label: '全部观看时间' },
+  { value: 'this-month', label: '本月观看' },
+  { value: 'this-year', label: '本年观看' },
+  { value: 'last-year', label: '去年观看' }
+];
+
+/** 上映时间筛选的固定选项（年份选项在影视库内按数据动态补充） */
+export const RELEASE_YEAR_BASE_OPTIONS = [
+  { value: '', label: '全部上映时间' }
+];
+
+/**
+ * 按「观看时间」筛选：只要该作品有任意一次观看事件落在目标范围内即命中。
+ * @param dates 该作品的全部观看日期（YYYY-MM-DD 数组，来自统计 CTE）
+ * @param value 筛选值：this-month / this-year / last-year / 具体年份(如 2025)
+ */
+export function matchesWatchTimeFilter(dates: string[] | undefined, value: string): boolean {
+  if (!value) return true;
+  if (!dates || dates.length === 0) return false;
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0-11
+  const ym = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+  switch (value) {
+    case 'this-month':
+      return dates.some((d) => d.startsWith(ym));
+    case 'this-year':
+      return dates.some((d) => d.startsWith(`${year}-`));
+    case 'last-year':
+      return dates.some((d) => d.startsWith(`${year - 1}-`));
+    default:
+      // 具体年份
+      return /^\d{4}$/.test(value) && dates.some((d) => d.startsWith(`${value}-`));
+  }
+}
+
+/**
+ * 按「上映时间」筛选：匹配作品的上映年份。
+ * @param year 作品上映年份
+ * @param value 筛选值：具体年份(如 2025) 或 decade(如 2020s)
+ */
+export function matchesReleaseYearFilter(year: number | null | undefined, value: string): boolean {
+  if (!value) return true;
+  if (value.endsWith('s') && /^\d{3}s$/.test(value)) {
+    const decade = parseInt(value, 10);
+    return !!year && year >= decade && year < decade + 10;
+  }
+  return !!year && String(year) === value;
+}
+
 /**
  * 按「类型」筛选作品。
  * - 普通值(movie/tv)：匹配 movie.type；其中 tv 会排除带「动漫」标签的作品，保证与「动漫」选项互斥
