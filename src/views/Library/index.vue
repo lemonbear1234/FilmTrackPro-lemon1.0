@@ -89,6 +89,7 @@ import { useMovieStore } from '../../stores/movie';
 import { useAppStore } from '../../stores/app';
 import { debounce, tmdbAPI } from '../../utils/api';
 import { fuzzySearchAsync } from '../../utils/search';
+import { matchesTypeFilter } from '../../utils/constants';
 import { useInfiniteScroll, type LoadFunction } from '../../composables/useInfiniteScroll';
 import StorageService, { StorageKey } from '../../utils/storage';
 
@@ -140,9 +141,9 @@ const saveViewMode = (mode: 'grid' | 'list') => {
 const baseFilteredItems = computed(() => {
   let results = [...allMovies.value];
 
-  // 按类型筛选
+  // 按类型筛选（动漫为标签筛选，其余为数据库类型筛选）
   if (selectedType.value) {
-    results = results.filter(movie => movie.type === selectedType.value);
+    results = results.filter(movie => matchesTypeFilter(movie, selectedType.value));
   }
 
   // 按状态筛选

@@ -5,12 +5,14 @@ import type { Movie } from '../../../types';
 import { getWatchProgressSummary } from '../../../utils/seasonProgress';
 import { getMovieHistoryDate, parseHistoryDate } from '../../../utils/historyDate';
 import { fuzzySearchAsync } from '../../../utils/search';
+import { matchesTypeFilter, TAG_ANIME_VALUE } from '../../../utils/constants';
 import type { Option } from '../../../components/ui/types';
 
 const historyTypeOptions: Option[] = [
   { value: '', label: '全部类型' },
   { value: 'movie', label: '电影' },
-  { value: 'tv', label: '剧集' }
+  { value: 'tv', label: '剧集' },
+  { value: TAG_ANIME_VALUE, label: '动漫' }
 ];
 
 const historyStatusOptions: Option[] = [
@@ -101,7 +103,7 @@ export function useHistoryView(movies: { value: Movie[] }) {
     let result = [...movies.value];
 
     if (selectedType.value) {
-      result = result.filter(movie => movie.type === selectedType.value);
+      result = result.filter(movie => matchesTypeFilter(movie, selectedType.value));
     }
 
     if (selectedStatus.value) {
