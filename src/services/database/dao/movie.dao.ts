@@ -534,26 +534,47 @@ export class MovieDAO {
 
       const existing = await db.select('SELECT * FROM movies WHERE id = $1', [id]) as MovieRow[]
       if (existing.length === 0) {
-        return { success: false, error: '电影不存在' }
+        return { success: false, error: '这条记录已经不存在了，请刷新后重试' }
       }
-      const current = existing[0]
 
-      // undefined 表示「不修改」，null 表示「清空」
-      const nextCreatedAt = patch.created_at !== undefined ? patch.created_at : current.created_at
-      const nextTotalSeasons = patch.total_seasons !== undefined ? patch.total_seasons : current.total_seasons
-      const nextTotalEpisodes = patch.total_episodes !== undefined ? patch.total_episodes : current.total_episodes
-      const nextRuntime = patch.runtime !== undefined ? patch.runtime : current.runtime
-      const nextTmdbId = patch.tmdb_id !== undefined ? patch.tmdb_id : current.tmdb_id
+      // 动态拼接 SET：只更新用户传进来的字段
+      // 清空（null）时直接写 SQL 字面量 NULL，避免可空字段的参数绑定问题
+      const sets: string[] = []
+      const params: Array<string | number> = []
+
+      const pushValue = (column: string, value: string | number | null) => {
+        if (value === null) {
+          sets.push(`${column} = NULL`)
+          return
+        }
+        params.push(value)
+        sets.push(`${column} = $${params.length}`)
+      }
+
+      if (patch.created_at !== undefined) pushValue('created_at', patch.created_at)
+      if (patch.total_seasons !== undefined) pushValue('total_seasons', patch.total_seasons)
+      if (patch.total_episodes !== undefined) pushValue('total_episodes', patch.total_episodes)
+      if (patch.runtime !== undefined) pushValue('runtime', patch.runtime)
+      if (patch.tmdb_id !== undefined) pushValue('tmdb_id', patch.tmdb_id)
+
+      if (sets.length === 0) {
+        return { success: false, error: '没有需要修改的内容' }
+      }
+
+      params.push(timestamp)
+      sets.push(`updated_at = $${params.length}`)
+      params.push(id)
 
       await db.execute(
-        `UPDATE movies SET
-          created_at = $1, total_seasons = $2, total_episodes = $3, runtime = $4, tmdb_id = $5, updated_at = $6
-        WHERE id = $7`,
-        [nextCreatedAt, nextTotalSeasons, nextTotalEpisodes, nextRuntime, nextTmdbId, timestamp, id]
+        `UPDATE movies SET ${sets.join(', ')} WHERE id = $${params.length}`,
+        params
       )
 
       const updated = await db.select('SELECT * FROM movies WHERE id = $1', [id]) as MovieRow[]
       const row = updated[0]
+      if (!row) {
+        return { success: false, error: '更新后未能读回记录，请刷新后重试' }
+      }
       return {
         success: true,
         data: {
@@ -564,7 +585,8 @@ export class MovieDAO {
         } as Movie
       }
     } catch (error) {
-      return { success: false, error: `更新详细信息失败: ${error}` }
+      const detail = error instanceof Error ? error.message : String(error)
+      return { success: false, error: `更新详细信息失败: ${detail}` }
     }
   }
 

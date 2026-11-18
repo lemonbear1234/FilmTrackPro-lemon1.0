@@ -76,6 +76,13 @@
         <p class="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
           改 TMDb ID 只影响跳转链接，不会重新抓取海报和简介；需要重新抓取请用「更新影视信息」。
         </p>
+
+        <p
+          v-if="errorMessage"
+          class="rounded-xl bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-700 break-words"
+        >
+          {{ errorMessage }}
+        </p>
       </div>
     </template>
   </Modal>
@@ -91,6 +98,7 @@ const props = defineProps<{
   isOpen: boolean;
   movie: Movie;
   saving: boolean;
+  errorMessage?: string;
 }>();
 
 const emit = defineEmits<{

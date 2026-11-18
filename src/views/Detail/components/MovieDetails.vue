@@ -6,7 +6,7 @@
         type="button"
         class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
         title="修改详细信息"
-        @click="editOpen = true"
+        @click="openEdit"
       >
         <Pencil class="h-3.5 w-3.5" />
         编辑
@@ -43,7 +43,8 @@
       :is-open="editOpen"
       :movie="movie"
       :saving="saving"
-      @close="editOpen = false"
+      :error-message="editError"
+      @close="closeEdit"
       @save="handleSave"
     />
   </div>
@@ -70,11 +71,22 @@ const emit = defineEmits<{
 const movieStore = useMovieStore();
 const editOpen = ref(false);
 const saving = ref(false);
+const editError = ref('');
+
+const openEdit = () => {
+  editError.value = '';
+  editOpen.value = true;
+};
+
+const closeEdit = () => {
+  editOpen.value = false;
+};
 
 const handleSave = async (patch: MovieDetailsExtraPatch) => {
   if (!props.movie || saving.value) return;
 
   saving.value = true;
+  editError.value = '';
   try {
     const result = await movieStore.updateMovieExtraInfo(props.movie.id, patch);
     if (result.success && result.data) {
@@ -82,10 +94,12 @@ const handleSave = async (patch: MovieDetailsExtraPatch) => {
       editOpen.value = false;
       toast.success('详细信息已更新');
     } else {
-      toast.error(result.error || '更新失败，请稍后重试');
+      editError.value = result.error || '更新失败，请稍后重试';
+      toast.error(editError.value);
     }
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : '更新失败，请稍后重试');
+    editError.value = error instanceof Error ? error.message : String(error);
+    toast.error(editError.value);
   } finally {
     saving.value = false;
   }
