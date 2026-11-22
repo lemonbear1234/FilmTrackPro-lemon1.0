@@ -244,7 +244,9 @@ export function useHomeData() {
     const today = todayKey();
     const todayItems = groups
       .filter((group) => group.date && group.date.slice(0, 10) === today)
-      .flatMap((group) => group.items);
+      .flatMap((group) => group.items)
+      // 电影上映单独成区，通知文案说的是「新集」，别把上映日混进来
+      .filter((item) => item.media_type !== 'movie');
     if (todayItems.length === 0) return;
 
     const titles = todayItems.slice(0, 3).map((item) => item.title);

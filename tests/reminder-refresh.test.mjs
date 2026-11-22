@@ -113,8 +113,12 @@ describe('更新提醒：范围可调', () => {
   it('页面上有范围切换入口，并带「全部」', () => {
     assert.ok(/reminder-range/.test(homeView), '缺少范围分段控件')
     assert.ok(
-      /未来 \$\{reminderRange\} 天/.test(homeView),
+      /reminderRangeLabel/.test(homeView),
       '副标题应显示当前范围'
+    )
+    assert.ok(
+      /reminderRange\.value >= 90 \? '全部' : `未来 \$\{reminderRange\.value\} 天`/.test(homeView),
+      '范围文案要由 reminderRange 推导'
     )
     assert.ok(
       /\{ value: 90, label: '全部' \}/.test(homeData),

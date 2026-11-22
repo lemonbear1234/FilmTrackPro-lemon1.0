@@ -245,7 +245,7 @@
             <div>
               <h2 class="text-xl font-semibold text-gray-900">更新提醒</h2>
               <p class="text-gray-500 text-sm">
-                {{ reminderRange >= 90 ? '全部' : `未来 ${reminderRange} 天` }}的播出 · 同一部剧只占一项
+                {{ reminderRangeLabel }}的剧集 · 同一部剧只占一项<template v-if="movieReminderItems.length > 0"> · 电影上映单独列出</template>
               </p>
             </div>
           </div>
@@ -309,17 +309,17 @@
         />
 
         <div
-          v-else-if="reminderGroups.length === 0 && reminderBeyondRange > 0"
+          v-else-if="!hasReminderContent && reminderBeyondRange > 0"
           class="reminder-empty-range"
         >
-          <p class="font-medium text-gray-700">当前 {{ reminderRange >= 90 ? '全部' : `未来 ${reminderRange} 天` }}没有要更新的</p>
+          <p class="font-medium text-gray-700">当前 {{ reminderRangeLabel }}没有要更新的</p>
           <p class="text-sm text-gray-500 mt-1">
             另有 {{ reminderBeyondRange }} 条手动提醒在更远处，切到「全部」可以查看。
           </p>
         </div>
 
         <EmptyState
-          v-else-if="reminderGroups.length === 0"
+          v-else-if="!hasReminderContent"
           tone="info"
           :icon="BellRingIcon"
           title="近期没有即将更新的剧集"
@@ -331,6 +331,11 @@
         />
 
         <div v-else class="space-y-6">
+          <div v-if="tvReminderGroups.length === 0" class="reminder-empty-range">
+            <p class="font-medium text-gray-700">{{ reminderRangeLabel }}没有要更新的剧集</p>
+            <p class="text-sm text-gray-500 mt-1">电影上映日程在下方单独列出</p>
+          </div>
+
           <!-- 未来：每天一列，四天一组横向排；同一天多部在列内往下叠 -->
           <div
             v-for="(chunk, chunkIndex) in upcomingChunks"
@@ -358,6 +363,28 @@
           <p v-if="reminderBeyondRange > 0" class="reminder-beyond-hint">
             另有 {{ reminderBeyondRange }} 条手动提醒在当前范围之外，切到「全部」可以查看
           </p>
+
+          <!-- 电影上映：定档日往往提前几个月，单独成区，不跟着剧集窗口一起被切掉 -->
+          <div v-if="movieReminderItems.length > 0" class="movie-release-section">
+            <div class="movie-release-head">
+              <div class="movie-release-heading">
+                <FilmIcon class="w-4 h-4 text-amber-500" />
+                <span>电影上映</span>
+                <span class="movie-release-count">{{ movieReminderItems.length }} 部</span>
+              </div>
+              <span class="movie-release-hint">按上映日 · 不受剧集窗口限制</span>
+            </div>
+            <div class="movie-release-grid">
+              <MovieReleaseCard
+                v-for="item in movieReminderItems"
+                :key="`movie-${item.movie_id}-${item.air_date}`"
+                :item="item"
+                @open="handleReminderClick(item)"
+                @edit="openEditReminder(item)"
+                @remove="askRemoveReminder(item)"
+              />
+            </div>
+          </div>
 
           <!-- 已播出：默认折叠，只保留最近一周，可一键清空 -->
           <div v-if="pastReminderItems.length > 0" class="reminder-past-section">
@@ -586,6 +613,7 @@ import CachedImage from '../components/ui/CachedImage.vue'
 import Modal from '../components/ui/Modal.vue'
 import ReminderEditModal from '../components/ReminderEditModal.vue'
 import ReminderCard from '../components/ReminderCard.vue'
+import MovieReleaseCard from '../components/MovieReleaseCard.vue'
 import { toast } from '../utils/toast'
 import { tvReminderService } from '../services/reminder'
 import type { TVEpisodeReminder, ReminderEditPrefill } from '../types'
@@ -657,9 +685,35 @@ const PAST_KEEP_DAYS = 7
 const showPastReminders = ref(false)
 const pastClearConfirmOpen = ref(false)
 
+/** 电影上映：定档日往往提前几个月，混在日列里会把整行撑空，单独排一排 */
+const movieReminderItems = computed(() =>
+  reminderGroups.value
+    .flatMap(group => group.items)
+    .filter(item => item.media_type === 'movie')
+    .sort((left, right) => {
+      // 未上映的按档期由近到远；已经上映的沉到后面，最近的在前
+      if (Boolean(left.is_past) !== Boolean(right.is_past)) {
+        return left.is_past ? 1 : -1
+      }
+      const leftTime = new Date(left.air_date).getTime()
+      const rightTime = new Date(right.air_date).getTime()
+      return left.is_past ? rightTime - leftTime : leftTime - rightTime
+    })
+)
+
+/** 剧集区只留正在更新的剧，电影已经在下方的独立区块里 */
+const tvReminderGroups = computed(() =>
+  reminderGroups.value
+    .map(group => ({
+      ...group,
+      items: group.items.filter(item => item.media_type !== 'movie')
+    }))
+    .filter(group => group.items.length > 0)
+)
+
 /** 未来的提醒：每个日期一组，四天凑成一行 */
 const upcomingChunks = computed(() => {
-  const groups = reminderGroups.value.filter(group => !group.items.every(item => item.is_past))
+  const groups = tvReminderGroups.value.filter(group => !group.items.every(item => item.is_past))
   const chunks: typeof groups[] = []
   for (let index = 0; index < groups.length; index += 4) {
     chunks.push(groups.slice(index, index + 4))
@@ -669,10 +723,18 @@ const upcomingChunks = computed(() => {
 
 /** 已播出：统一收进底部折叠区，按日期倒序，最近的在前 */
 const pastReminderItems = computed(() =>
-  reminderGroups.value
+  tvReminderGroups.value
     .filter(group => group.items.every(item => item.is_past))
     .flatMap(group => group.items)
     .sort((left, right) => new Date(right.air_date).getTime() - new Date(left.air_date).getTime())
+)
+
+const hasReminderContent = computed(
+  () => tvReminderGroups.value.length > 0 || movieReminderItems.value.length > 0
+)
+
+const reminderRangeLabel = computed(() =>
+  reminderRange.value >= 90 ? '全部' : `未来 ${reminderRange.value} 天`
 )
 
 const reminderRemovalCopy = computed(() => {
@@ -1016,6 +1078,48 @@ onMounted(() => {
   color: #94a3b8;
   text-align: center;
   padding: 0.25rem 0;
+}
+
+.movie-release-section {
+  border-top: 1px dashed rgba(253, 230, 138, 0.9);
+  padding-top: 1.1rem;
+}
+
+.movie-release-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.movie-release-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.movie-release-count {
+  border-radius: 9999px;
+  background: rgba(254, 243, 199, 0.9);
+  padding: 0.05rem 0.45rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #b45309;
+}
+
+.movie-release-hint {
+  font-size: 0.74rem;
+  color: #94a3b8;
+}
+
+.movie-release-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 0.75rem;
 }
 
 .reminder-past-section {

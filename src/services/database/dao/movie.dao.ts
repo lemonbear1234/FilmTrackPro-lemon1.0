@@ -139,6 +139,7 @@ export class MovieDAO {
   /**
    * 获取历史列表
    * 按观看时间优先排序，回退到首次加入时间和更新时间
+   * 「想看」只是收藏，没看过就进历史会显得时间线很乱，统一排除
    */
   static async getHistoryMovies(
     limit?: number,
@@ -154,6 +155,7 @@ export class MovieDAO {
             NULLIF(substr(date_updated, 1, 10), '')
           ) as history_date
         FROM movies
+        WHERE status <> 'planned'
         ORDER BY history_date DESC, date_updated DESC
       `
       const params: unknown[] = []

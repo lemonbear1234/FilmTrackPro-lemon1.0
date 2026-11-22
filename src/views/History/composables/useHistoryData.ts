@@ -10,7 +10,8 @@ export function useHistoryData() {
   let cachedHistoryMovies: Movie[] | null = null;
 
   const stats = computed(() => {
-    const movies = movieStore.movies;
+    // 观看历史不含「想看」：列表里已经排除了，统计口径要跟着对齐
+    const movies = movieStore.movies.filter(movie => movie.status !== 'planned');
     const completed = movies.filter(movie => movie.status === 'completed');
     const watching = movies.filter(movie => movie.status === 'watching');
     const ratings = movies

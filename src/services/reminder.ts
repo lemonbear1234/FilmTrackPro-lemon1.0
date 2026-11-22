@@ -562,7 +562,11 @@ class TVReminderService {
       const merged = aggregated.filter(item => {
         if (item.is_past) return true;
         const offset = daysFromToday(item.air_date);
-        return !Number.isNaN(offset) && offset <= days;
+        if (Number.isNaN(offset)) return false;
+        // 电影上映日往往提前几个月就定档，套用 7 天窗口等于看不见；
+        // 它单独成区展示，这里只保证不越过保留期
+        if (item.media_type === 'movie') return offset >= -PAST_MANUAL_KEEP_DAYS;
+        return offset <= days;
       });
 
       // 未来条目按日期升序在前，已播出的手动提醒沉到最后（倒序，最近的在前）
@@ -749,6 +753,13 @@ class TVReminderService {
     return databaseAPI.deleteManualReminder(id);
   }
 
+  /** 电影上映日单独成区，永远可见，所以不能被算成「范围外」 */
+  private isMovieEntry(entry: ReminderEntry): boolean {
+    if (entry.media_type) return entry.media_type === 'movie';
+    // 老数据没有 media_type：既没有季集也没有周期，就是一条定档日
+    return !entry.season_number && !entry.episode_number && !entry.repeat_days;
+  }
+
   /** 统计落在当前时间窗口之外的手动提醒，列表底部用它提示「还有 N 条」 */
   public async countManualRemindersBeyondRange(days: number): Promise<number> {
     const result = await databaseAPI.getManualReminders();
@@ -757,6 +768,7 @@ class TVReminderService {
     }
 
     return result.data.filter(entry => {
+      if (this.isMovieEntry(entry)) return false;
       const offset = daysFromToday(entry.air_date);
       return !Number.isNaN(offset) && offset > days;
     }).length;
