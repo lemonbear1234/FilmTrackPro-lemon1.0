@@ -22,6 +22,10 @@
         <span class="text-gray-600">总季数</span>
         <span class="font-medium">{{ movie.total_seasons }}</span>
       </div>
+      <div v-if="movie.total_episodes" class="flex justify-between">
+        <span class="text-gray-600">总集数</span>
+        <span class="font-medium">{{ movie.total_episodes }}</span>
+      </div>
       <div v-if="movie.runtime" class="flex justify-between">
         <span class="text-gray-600">时长</span>
         <span class="font-medium">{{ movie.runtime }} 分钟</span>

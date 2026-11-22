@@ -119,6 +119,7 @@
 <script setup lang="ts">
 import { ref, watch, computed, nextTick } from 'vue';
 import { APP_CONFIG } from '../../../config/app.config';
+import { todayLocalDate } from '../../utils/date';
 import DateField from './DateField.vue';
 import Modal from './Modal.vue';
 import HeadlessSelect from './HeadlessSelect.vue';
@@ -169,7 +170,7 @@ const initializeMovieData = (movie: Movie): Movie => {
     // 确保评分字段有默认值
     personal_rating: movie.personal_rating ?? 0,
     // 确保观看日期字段有默认值，正确回显watched_date
-    watched_date: movie.watched_date || new Date().toISOString().split('T')[0],
+    watched_date: movie.watched_date || todayLocalDate(),
     // 确保其他可能缺失的字段有默认值
     current_season: getNormalizedProgress(movie).season,
     current_episode: getNormalizedProgress(movie).episode,

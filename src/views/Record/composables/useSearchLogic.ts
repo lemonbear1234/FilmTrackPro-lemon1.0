@@ -6,6 +6,7 @@ import { ref, type Ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useMovieStore } from '../../../stores/movie';
 import { tmdbAPI, debounce } from '../../../utils/api';
+import { todayLocalDate } from '../../../utils/date';
 import { getYear } from '../../../utils/constants';
 import type { TMDbMovie } from '../../../types';
 import type { RecordForm, SearchState, DialogState } from '../types';
@@ -120,7 +121,7 @@ export function useSearchLogic(
       form.value.personal_rating = 0;
       form.value.watch_source = '';
       form.value.notes = '';
-      form.value.watched_date = new Date().toISOString().split('T')[0];
+      form.value.watched_date = todayLocalDate();
       form.value.current_season = 1;
       form.value.current_episode = 0;
 

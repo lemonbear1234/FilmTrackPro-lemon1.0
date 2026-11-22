@@ -1,4 +1,5 @@
 import { computed, ref, watch, type Ref } from 'vue';
+import { todayLocalDate } from '../utils/date';
 import type { SeasonsData } from '../types';
 import {
   clampEpisodeForSeason,
@@ -31,7 +32,7 @@ const getWatchedDateValidation = (watchedDate?: string | null) => {
     };
   }
 
-  const currentDate = new Date().toISOString().split('T')[0];
+  const currentDate = todayLocalDate();
   if (watchedDate > currentDate) {
     return {
       isValid: false,

@@ -77,7 +77,7 @@
           <DateField
             :model-value="form.watched_date"
             @update:model-value="$emit('update:watchedDate', $event)"
-            :max="new Date().toISOString().split('T')[0]"
+            :max="todayLocalDate()"
             :invalid="Boolean(dateError)"
           />
           <!-- 日期错误提示 -->
@@ -115,6 +115,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Clipboard as ClipboardIcon } from 'lucide-vue-next';
+import { todayLocalDate } from '../../../utils/date';
 import DateField from '../../../components/ui/DateField.vue';
 import HeadlessSelect from '../../../components/ui/HeadlessSelect.vue';
 import StarRating from '../../../components/ui/StarRating.vue';

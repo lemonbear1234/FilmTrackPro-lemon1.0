@@ -121,7 +121,7 @@
               <label class="block text-sm font-medium text-gray-700 mb-1">重刷日期</label>
               <DateField
                 v-model="historyForm.watched_date"
-                :max="new Date().toISOString().split('T')[0]"
+                :max="todayLocalDate()"
                 :invalid="Boolean(historyDateError)"
               />
               <p v-if="historyDateError" class="mt-2 text-sm text-red-600">
@@ -193,6 +193,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useAppStore } from '../../../stores/app';
 import { useMovieStore } from '../../../stores/movie';
+import { todayLocalDate } from '../../../utils/date';
 import { formatDate } from '../../../utils/constants';
 import DateField from '../../../components/ui/DateField.vue';
 import StarRating from '../../../components/ui/StarRating.vue';
@@ -219,7 +220,7 @@ const deletingHistoryId = ref<string | null>(null);
 
 // 表单数据
 const historyForm = ref({
-  watched_date: new Date().toISOString().split('T')[0],
+  watched_date: todayLocalDate(),
   rating: undefined as number | undefined,
   notes: ''
 });
@@ -253,7 +254,7 @@ const addNewHistory = () => {
   editingHistory.value = null;
   historyDateError.value = '';
   historyForm.value = {
-    watched_date: new Date().toISOString().split('T')[0],
+    watched_date: todayLocalDate(),
     rating: undefined,
     notes: ''
   };
@@ -281,7 +282,7 @@ const saveHistory = async () => {
   if (!props.movie.id) return;
   
   // 校验观看日期不能大于当前日期
-  const currentDate = new Date().toISOString().split('T')[0];
+  const currentDate = todayLocalDate();
   if (historyForm.value.watched_date > currentDate) {
     historyDateError.value = '重刷日期不能晚于今天';
     appStore.modalService.showInfo('日期有误', '重刷日期不能晚于今天');

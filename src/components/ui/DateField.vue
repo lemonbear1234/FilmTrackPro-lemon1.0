@@ -33,37 +33,104 @@
       >
         <div v-if="isOpen" ref="panelRef" class="date-panel" :style="panelStyle">
         <div class="date-panel-header">
-          <button type="button" class="date-nav-button" @click="moveMonth(-1)">
+          <button
+            type="button"
+            class="date-nav-button"
+            :title="viewMode === 'years' ? '上十年' : viewMode === 'months' ? '上一年' : '上一月'"
+            @click="stepBackward"
+          >
             <ChevronLeft class="h-4 w-4" />
           </button>
-          <div class="date-panel-title">{{ monthLabel }}</div>
-          <button type="button" class="date-nav-button" @click="moveMonth(1)">
+          <div class="date-panel-title-group">
+            <button
+              type="button"
+              class="date-panel-title"
+              :class="{ 'date-panel-title-active': viewMode !== 'days' }"
+              @click="toggleTitleView"
+            >
+              {{ panelTitle }}
+            </button>
+            <button
+              v-if="viewMode !== 'days'"
+              type="button"
+              class="date-panel-title-suffix"
+              @click="viewMode = 'days'"
+            >
+              返回日历
+            </button>
+          </div>
+          <button
+            type="button"
+            class="date-nav-button"
+            :title="viewMode === 'years' ? '下十年' : viewMode === 'months' ? '下一年' : '下一月'"
+            @click="stepForward"
+          >
             <ChevronRight class="h-4 w-4" />
           </button>
         </div>
 
-        <div class="date-week-grid">
-          <span v-for="label in weekdayLabels" :key="label" class="date-weekday">{{ label }}</span>
-        </div>
+        <template v-if="viewMode === 'days'">
+          <div class="date-week-grid">
+            <span v-for="label in weekdayLabels" :key="label" class="date-weekday">{{ label }}</span>
+          </div>
 
-        <div class="date-day-grid">
+          <div class="date-day-grid">
+            <button
+              v-for="cell in calendarCells"
+              :key="cell.key"
+              type="button"
+              :disabled="cell.disabled || !cell.date"
+              :class="[
+                'date-day',
+                {
+                  'date-day-muted': cell.isMuted,
+                  'date-day-selected': cell.date === selectedValue,
+                  'date-day-today': cell.date === todayString,
+                  'date-day-disabled': cell.disabled || !cell.date,
+                }
+              ]"
+              @click="selectDate(cell.date)"
+            >
+              {{ cell.label }}
+            </button>
+          </div>
+        </template>
+
+        <div v-else-if="viewMode === 'months'" class="date-month-grid">
           <button
-            v-for="cell in calendarCells"
-            :key="cell.key"
+            v-for="month in 12"
+            :key="`month-${month}`"
             type="button"
-            :disabled="cell.disabled || !cell.date"
+            :disabled="isMonthDisabled(month)"
             :class="[
-              'date-day',
+              'date-chip',
               {
-                'date-day-muted': cell.isMuted,
-                'date-day-selected': cell.date === selectedValue,
-                'date-day-today': cell.date === todayString,
-                'date-day-disabled': cell.disabled || !cell.date,
+                'date-chip-selected': month === visibleMonth,
+                'date-chip-disabled': isMonthDisabled(month),
               }
             ]"
-            @click="selectDate(cell.date)"
+            @click="pickMonth(month)"
           >
-            {{ cell.label }}
+            {{ month }}月
+          </button>
+        </div>
+
+        <div v-else class="date-month-grid date-year-grid">
+          <button
+            v-for="year in yearWindow"
+            :key="`year-${year}`"
+            type="button"
+            :disabled="isYearDisabled(year)"
+            :class="[
+              'date-chip',
+              {
+                'date-chip-selected': year === visibleYear,
+                'date-chip-disabled': isYearDisabled(year),
+              }
+            ]"
+            @click="pickYear(year)"
+          >
+            {{ year }}
           </button>
         </div>
 
@@ -85,6 +152,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-vue-next';
 import type { DateFieldProps, DateFieldEmits } from './types';
+import { todayLocalDate } from '../../utils/date';
 
 type Props = DateFieldProps;
 type Emits = DateFieldEmits;
@@ -114,7 +182,11 @@ const panelRef = ref<HTMLElement | null>(null);
 const panelStyle = ref<Record<string, string>>({});
 
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日'];
-const todayString = new Date().toISOString().split('T')[0];
+
+// 本地时区的今天，避免 UTC 偏移导致「今天」变成昨天
+const todayString = todayLocalDate();
+// 日历三级视图：日 / 月 / 年
+const viewMode = ref<'days' | 'months' | 'years'>('days');
 
 const clampDate = (date: string) => {
   let value = date;
@@ -151,7 +223,29 @@ const displayValue = computed(() => {
   return `${year}年${month}月${day}日`;
 });
 
-const monthLabel = computed(() => `${visibleYear.value}年${visibleMonth.value}月`);
+// 年份视图一次展示 12 年
+const YEARS_PER_PAGE = 12;
+const yearWindowStart = ref(Math.floor(visibleYear.value / YEARS_PER_PAGE) * YEARS_PER_PAGE);
+
+const yearWindow = computed(() =>
+  Array.from({ length: YEARS_PER_PAGE }, (_, index) => yearWindowStart.value + index)
+);
+
+const panelTitle = computed(() => {
+  if (viewMode.value === 'months') {
+    return `${visibleYear.value}年`;
+  }
+
+  if (viewMode.value === 'years') {
+    return `${yearWindowStart.value} - ${yearWindowStart.value + YEARS_PER_PAGE - 1}`;
+  }
+
+  return `${visibleYear.value}年${visibleMonth.value}月`;
+});
+
+watch(visibleYear, year => {
+  yearWindowStart.value = Math.floor(year / YEARS_PER_PAGE) * YEARS_PER_PAGE;
+});
 
 const todayWithinRange = computed(() => {
   const value = clampDate(todayString);
@@ -170,6 +264,99 @@ const normalizeMonth = (offset: number) => {
 
 const moveMonth = (offset: number) => {
   normalizeMonth(offset);
+};
+
+// 箭头行为随视图变化：月视图翻月、年视图翻年、年份视图翻十年窗口
+const stepBackward = () => {
+  if (viewMode.value === 'years') {
+    yearWindowStart.value -= YEARS_PER_PAGE;
+    return;
+  }
+
+  if (viewMode.value === 'months') {
+    visibleYear.value -= 1;
+    return;
+  }
+
+  moveMonth(-1);
+};
+
+const stepForward = () => {
+  if (viewMode.value === 'years') {
+    yearWindowStart.value += YEARS_PER_PAGE;
+    return;
+  }
+
+  if (viewMode.value === 'months') {
+    visibleYear.value += 1;
+    return;
+  }
+
+  moveMonth(1);
+};
+
+// 点标题在 日 → 月 → 年 之间循环
+const toggleTitleView = () => {
+  if (viewMode.value === 'days') {
+    viewMode.value = 'months';
+    return;
+  }
+
+  if (viewMode.value === 'months') {
+    viewMode.value = 'years';
+    return;
+  }
+
+  viewMode.value = 'days';
+};
+
+const pickMonth = (month: number) => {
+  if (isMonthDisabled(month)) {
+    return;
+  }
+
+  visibleMonth.value = month;
+  viewMode.value = 'days';
+};
+
+const pickYear = (year: number) => {
+  if (isYearDisabled(year)) {
+    return;
+  }
+
+  visibleYear.value = year;
+  viewMode.value = 'months';
+};
+
+const isMonthDisabled = (month: number) => {
+  const firstDay = getDateString(visibleYear.value, month, 1);
+  const lastDay = getDateString(
+    visibleYear.value,
+    month,
+    new Date(visibleYear.value, month, 0).getDate()
+  );
+
+  if (props.min && lastDay < props.min) {
+    return true;
+  }
+
+  if (props.max && firstDay > props.max) {
+    return true;
+  }
+
+  return false;
+};
+
+const isYearDisabled = (year: number) => {
+  if (props.min && year < Number(props.min.slice(0, 4))) {
+    return true;
+  }
+
+  if (props.max && year > Number(props.max.slice(0, 4))) {
+    return true;
+  }
+
+  return false;
 };
 
 const isDateDisabled = (date: string) => {
@@ -307,6 +494,7 @@ const toggleOpen = () => {
 
   if (!isOpen.value) {
     syncVisibleMonth(selectedValue.value || todayWithinRange.value);
+    viewMode.value = 'days';
     updatePanelPosition();
   }
 
@@ -335,7 +523,11 @@ const handleDocumentPointerDown = (event: MouseEvent) => {
 const handleTriggerBlur = () => {
   window.setTimeout(() => {
     const activeElement = document.activeElement;
-    if (rootRef.value && activeElement instanceof Node && rootRef.value.contains(activeElement)) {
+    // 面板是 Teleport 到 body 的，焦点落在面板内按钮上时不能算「离开」
+    if (
+      activeElement instanceof Node &&
+      (rootRef.value?.contains(activeElement) || panelRef.value?.contains(activeElement))
+    ) {
       return;
     }
 
@@ -440,10 +632,92 @@ onBeforeUnmount(() => {
   margin-bottom: 0.9rem;
 }
 
+.date-panel-title-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
 .date-panel-title {
+  border: 0;
+  border-radius: 0.6rem;
+  background: transparent;
+  padding: 0.1rem 0.5rem;
   font-size: 0.92rem;
   font-weight: 600;
   color: #0f172a;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.date-panel-title:hover {
+  background: rgba(219, 234, 254, 0.7);
+  color: #1d4ed8;
+}
+
+.date-panel-title-active {
+  color: #1d4ed8;
+}
+
+.date-panel-title-suffix {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 0.66rem;
+  color: #94a3b8;
+  transition: color 160ms ease;
+}
+
+.date-panel-title-suffix:hover {
+  color: #1d4ed8;
+}
+
+.date-month-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+  padding: 0.2rem 0;
+}
+
+.date-year-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.date-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 0.85rem;
+  background: rgba(248, 250, 252, 0.9);
+  padding: 0.55rem 0;
+  font-size: 0.82rem;
+  color: #0f172a;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.date-chip:hover:not(.date-chip-disabled) {
+  background: rgba(219, 234, 254, 0.8);
+  color: #1d4ed8;
+}
+
+.date-chip-selected {
+  border-color: rgba(37, 99, 235, 0.45);
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+}
+
+.date-chip-selected:hover:not(.date-chip-disabled) {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+}
+
+.date-chip-disabled {
+  cursor: not-allowed;
+  opacity: 0.34;
 }
 
 .date-nav-button {

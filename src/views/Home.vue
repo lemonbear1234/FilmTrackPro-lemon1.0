@@ -83,6 +83,7 @@
             title="查看本月观看的电影"
             @click="navigateToLibrary('this-month', 'movie')"
             @keydown.enter="navigateToLibrary('this-month', 'movie')"
+            @keydown.space.prevent="navigateToLibrary('this-month', 'movie')"
           >
             <div class="stats-card-content">
               <div class="stats-card-icon-wrap"><CalendarIcon class="stats-card-icon" /></div>
@@ -97,6 +98,7 @@
             title="查看本月观看的剧集"
             @click="navigateToLibrary('this-month', 'tv')"
             @keydown.enter="navigateToLibrary('this-month', 'tv')"
+            @keydown.space.prevent="navigateToLibrary('this-month', 'tv')"
           >
             <div class="stats-card-content">
               <div class="stats-card-icon-wrap"><CheckCircleIcon class="stats-card-icon" /></div>
@@ -111,6 +113,7 @@
             title="查看本年观看的电影"
             @click="navigateToLibrary('this-year', 'movie')"
             @keydown.enter="navigateToLibrary('this-year', 'movie')"
+            @keydown.space.prevent="navigateToLibrary('this-year', 'movie')"
           >
             <div class="stats-card-content">
               <div class="stats-card-icon-wrap"><TrendingUpIcon class="stats-card-icon" /></div>
@@ -125,6 +128,7 @@
             title="查看本年观看的剧集"
             @click="navigateToLibrary('this-year', 'tv')"
             @keydown.enter="navigateToLibrary('this-year', 'tv')"
+            @keydown.space.prevent="navigateToLibrary('this-year', 'tv')"
           >
             <div class="stats-card-content">
               <div class="stats-card-icon-wrap"><CalendarIcon class="stats-card-icon" /></div>

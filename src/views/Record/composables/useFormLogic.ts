@@ -5,6 +5,7 @@
 import { ref, computed, watch, type Ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useMovieStore } from '../../../stores/movie';
+import { todayLocalDate } from '../../../utils/date';
 import { APP_CONFIG } from '../../../../config/app.config';
 import type { RecordForm, DialogState, StatusOption } from '../types';
 import type { Status } from '../../../types';
@@ -34,7 +35,7 @@ export function useFormLogic(
     watch_source: '',
     overview: '',
     notes: '',
-    watched_date: new Date().toISOString().split('T')[0], // 默认当天
+    watched_date: todayLocalDate(), // 默认当天
     tmdb_id: undefined,
     tmdb_rating: undefined,
     poster_path: '',
@@ -78,7 +79,7 @@ export function useFormLogic(
     }
 
     // 校验观看日期不能大于当前日期
-    const currentDate = new Date().toISOString().split('T')[0];
+    const currentDate = todayLocalDate();
     if (form.value.watched_date > currentDate) {
       showDialog('warning', '日期有误', '观看日期不能晚于今天，重新选一下吧');
       return;
@@ -137,7 +138,7 @@ export function useFormLogic(
       watch_source: '',
       overview: '',
       notes: '',
-      watched_date: new Date().toISOString().split('T')[0],
+      watched_date: todayLocalDate(),
       tmdb_id: undefined,
       tmdb_rating: undefined,
       poster_path: '',

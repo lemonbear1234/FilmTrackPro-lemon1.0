@@ -6,6 +6,7 @@ import { ref, onMounted, type Ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useMovieStore } from '../../../stores/movie';
 import { tmdbAPI } from '../../../utils/api';
+import { todayLocalDate } from '../../../utils/date';
 import { removeCachedImages } from '../../../utils/imageCache';
 import type { Movie, TMDbMovieDetail } from '../../../types';
 import type { DetailState, DialogState } from '../types';
@@ -142,7 +143,7 @@ export function useDetailData(
     try {
       // 校验观看日期不能大于当前日期
       if (updatedMovie.watched_date) {
-        const currentDate = new Date().toISOString().split('T')[0];
+        const currentDate = todayLocalDate();
         if (updatedMovie.watched_date > currentDate) {
           showDialog('warning', '日期有误', '观看日期不能晚于今天，重新选一下吧');
           return;

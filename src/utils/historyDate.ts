@@ -1,12 +1,7 @@
 import type { Movie } from '../types'
+import { formatLocalDate } from './date'
 
-function pad(value: number): string {
-  return value.toString().padStart(2, '0')
-}
-
-export function formatLocalDate(date: Date): string {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
+export { formatLocalDate }
 
 export function normalizeHistoryDateValue(value?: string | null): string | null {
   if (!value) {
