@@ -11,7 +11,7 @@
       <div class="space-y-4">
         <p class="text-sm text-gray-500 leading-relaxed">
           TMDb 上没有、或播出日期不准的剧集，可以在这里自己填。海报会先在本地影视库里找，
-          找不到再去 TMDb 取；都没有就留空。
+          找不到再去 TMDb 取；都没有就留空。剧集设好更新周期后，后续集数会自动按周期补齐。
         </p>
 
         <!-- 作品选择 -->
@@ -77,6 +77,32 @@
         </div>
 
         <div>
+          <label class="reminder-label">更新周期</label>
+          <div class="reminder-cycle-group" role="group" aria-label="更新周期">
+            <button
+              v-for="option in CYCLE_OPTIONS"
+              :key="option.value"
+              type="button"
+              class="reminder-cycle-button"
+              :class="{ 'reminder-cycle-button-active': cyclePreset === option.value }"
+              :aria-pressed="cyclePreset === option.value"
+              @click="cyclePreset = option.value"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+          <div v-if="cyclePreset === CUSTOM_CYCLE" class="mt-2">
+            <TextField
+              v-model="customCycleInput"
+              type="number"
+              input-mode="numeric"
+              placeholder="每隔多少天更新一集，如 3"
+            />
+          </div>
+          <p class="reminder-hint">{{ cycleHint }}</p>
+        </div>
+
+        <div>
           <label class="reminder-label">集标题（可选）</label>
           <TextField v-model="episodeNameInput" placeholder="如：第 8 集 · 归途" />
         </div>
@@ -96,7 +122,7 @@
             :disabled="busy"
             @click="handleDelete"
           >
-            删除这条提醒
+            {{ resolvedRepeatDays >= 1 ? '删除整条周期提醒' : '删除这条提醒' }}
           </button>
           <span v-else />
 
@@ -146,12 +172,26 @@ const emit = defineEmits<{
   (e: 'deleted'): void;
 }>();
 
+/** 新建时默认「每周」，绝大多数剧都是周更 */
+const NEW_ENTRY_REPEAT_DAYS = 7;
+const CUSTOM_CYCLE = -1;
+const CYCLE_OPTIONS = [
+  { value: 0, label: '单集' },
+  { value: 1, label: '每天' },
+  { value: 7, label: '每周' },
+  { value: 14, label: '每两周' },
+  { value: 30, label: '每月' },
+  { value: CUSTOM_CYCLE, label: '自定义' }
+];
+
 const titleInput = ref('');
 const airDate = ref('');
 const seasonInput = ref('');
 const episodeInput = ref('');
 const episodeNameInput = ref('');
 const notesInput = ref('');
+const cyclePreset = ref<number>(NEW_ENTRY_REPEAT_DAYS);
+const customCycleInput = ref('');
 const movieId = ref<string | null>(null);
 const tmdbId = ref<number | null>(null);
 const posterPath = ref<string | null>(null);
@@ -182,6 +222,49 @@ const toNumberOrNull = (value: string | number | null | undefined): number | nul
   return Number.isFinite(num) ? num : null;
 };
 
+/** 自定义周期是否填了合法的天数（1-365） */
+const customCycleValid = computed(() => {
+  if (cyclePreset.value !== CUSTOM_CYCLE) return true;
+  const value = toNumberOrNull(customCycleInput.value);
+  return value !== null && value >= 1 && value <= 365;
+});
+
+/** 最终落库的 repeat_days，0 表示不重复 */
+const resolvedRepeatDays = computed(() => {
+  if (cyclePreset.value !== CUSTOM_CYCLE) {
+    return cyclePreset.value;
+  }
+  const value = toNumberOrNull(customCycleInput.value);
+  return value === null ? 0 : Math.floor(value);
+});
+
+const cycleHint = computed(() => {
+  if (!customCycleValid.value) {
+    return '自定义周期请填 1-365 之间的天数';
+  }
+  if (resolvedRepeatDays.value >= 1) {
+    return `每 ${resolvedRepeatDays.value} 天更新一集，保存后会自动补齐后续集数（最多 6 集），不用一集一集添加`;
+  }
+  return '只提醒这一集；后续集数可以在保存后按周期补上';
+});
+
+/** 把已有的 repeat_days 还原到选项上 */
+const applyRepeatDays = (days: number | null | undefined) => {
+  const value = days == null ? 0 : Math.floor(Number(days));
+  if (!Number.isFinite(value) || value <= 0) {
+    cyclePreset.value = 0;
+    customCycleInput.value = '';
+    return;
+  }
+  if (CYCLE_OPTIONS.some(option => option.value === value)) {
+    cyclePreset.value = value;
+    customCycleInput.value = '';
+    return;
+  }
+  cyclePreset.value = CUSTOM_CYCLE;
+  customCycleInput.value = String(value);
+};
+
 const resetForm = () => {
   const prefill = props.prefill;
   titleInput.value = prefill?.title ?? '';
@@ -190,6 +273,7 @@ const resetForm = () => {
   episodeInput.value = prefill?.episode ? String(prefill.episode) : '';
   episodeNameInput.value = prefill?.episodeName ?? '';
   notesInput.value = prefill?.notes ?? '';
+  applyRepeatDays(prefill?.repeatDays ?? (prefill?.entryId ? 0 : NEW_ENTRY_REPEAT_DAYS));
   movieId.value = prefill?.movieId ?? null;
   tmdbId.value = prefill?.tmdbId ?? null;
   posterPath.value = prefill?.posterPath ?? null;
@@ -249,6 +333,7 @@ const buildForm = (): ReminderEntryForm => ({
   season_number: toNumberOrNull(seasonInput.value),
   episode_number: toNumberOrNull(episodeInput.value),
   episode_name: episodeNameInput.value.trim() || null,
+  repeat_days: resolvedRepeatDays.value >= 1 ? resolvedRepeatDays.value : null,
   notes: notesInput.value.trim() || null
 });
 
@@ -261,6 +346,10 @@ const handleSave = async () => {
   }
   if (!airDate.value) {
     errorMessage.value = '请选择播出日期';
+    return;
+  }
+  if (!customCycleValid.value) {
+    errorMessage.value = '自定义周期请填 1-365 之间的天数';
     return;
   }
 
@@ -320,6 +409,42 @@ const handleClose = () => {
   font-size: 0.78rem;
   font-weight: 500;
   color: #64748b;
+}
+
+.reminder-cycle-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.reminder-cycle-button {
+  border-radius: 0.65rem;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  background: #ffffff;
+  padding: 0.32rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #475569;
+  transition: all 140ms ease;
+}
+
+.reminder-cycle-button:hover {
+  border-color: rgba(147, 197, 253, 0.9);
+  color: #1d4ed8;
+}
+
+.reminder-cycle-button-active {
+  border-color: rgba(37, 99, 235, 0.9);
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.reminder-hint {
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: #94a3b8;
 }
 
 .reminder-suggestions {

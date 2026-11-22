@@ -19,6 +19,36 @@ export function todayLocalDate(): string {
   return formatLocalDate(new Date());
 }
 
+/**
+ * 在 YYYY-MM-DD 上加减天数
+ * 用 UTC 计时只是为了得到「日历日 + N」，不参与任何时区换算，跨月跨年都安全
+ */
+export function addDaysToDate(value: string, days: number): string {
+  const matched = String(value ?? '').trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!matched) {
+    return value;
+  }
+
+  const date = new Date(Date.UTC(Number(matched[1]), Number(matched[2]) - 1, Number(matched[3])));
+  date.setUTCDate(date.getUTCDate() + days);
+
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+}
+
+/** 目标日期距离今天还有几天：今天为 0，昨天为 -1，明天为 1 */
+export function daysFromToday(value: string): number {
+  const matched = String(value ?? '').trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!matched) {
+    return Number.NaN;
+  }
+
+  const target = Date.UTC(Number(matched[1]), Number(matched[2]) - 1, Number(matched[3]));
+  const now = new Date();
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+
+  return Math.round((target - today) / 86_400_000);
+}
+
 /** 把任意日期字符串裁剪成 YYYY-MM-DD（保留已有日期部分，不做时区换算） */
 export function toDateOnly(value?: string | null): string | null {
   if (!value) {

@@ -31,7 +31,7 @@ describe('更新提醒：手动增删改查', () => {
     })
 
     it('迁移版本已推进，老库能补建表', () => {
-      assert.ok(/LATEST_SCHEMA_VERSION = 4/.test(schema), '迁移版本应推进到 4')
+      assert.ok(/LATEST_SCHEMA_VERSION = 5/.test(schema), '迁移版本应推进到 5')
       assert.ok(
         /name: 'manual-reminder-entries'/.test(schema),
         '缺少 v4 迁移'
@@ -67,7 +67,7 @@ describe('更新提醒：手动增删改查', () => {
 
     it('修改与删除只作用于手动条目', () => {
       assert.ok(
-        /WHERE id = \$11 AND source = 'manual'/.test(dao),
+        /WHERE id = \$12 AND source = 'manual'/.test(dao),
         '更新不应改到忽略标记'
       )
       assert.ok(
@@ -93,7 +93,7 @@ describe('更新提醒：手动增删改查', () => {
       assert.ok(/collectAutoReminders/.test(service), '缺少自动提醒收集')
       assert.ok(/collectManualReminders/.test(service), '缺少手动提醒收集')
       assert.ok(
-        /const merged = \[\.\.\.autoFiltered, \.\.\.manualReminders\]/.test(service),
+        /const merged = \[\.\.\.autoFiltered, \.\.\.manualFiltered\]/.test(service),
         '两类提醒应合并'
       )
     })

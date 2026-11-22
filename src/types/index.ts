@@ -290,6 +290,17 @@ export interface TVEpisodeReminder {
   entry_id?: string;
   /** 手动提醒的备注 */
   notes?: string | null;
+  /** 手动提醒的更新周期（天），为空表示只提醒这一集 */
+  repeat_days?: number | null;
+  /** 周期提醒里第几场（0 = 用户填的那一集，>0 = 按周期自动补出来的） */
+  occurrence_sequence?: number;
+  /** 周期提醒的「原点」：自动补出来的场次靠它还原首播日/首集，编辑时才不会改错 */
+  cycle_base?: {
+    air_date: string;
+    season_number?: number | null;
+    episode_number?: number | null;
+    episode_name?: string | null;
+  };
   /** 播出日期已过 */
   is_past?: boolean;
 }
@@ -306,6 +317,8 @@ export interface ReminderEntry {
   season_number?: number | null;
   episode_number?: number | null;
   episode_name?: string | null;
+  /** 每多少天更新一集；为空表示不重复 */
+  repeat_days?: number | null;
   notes?: string | null;
   created_at: string;
   updated_at: string;
@@ -321,6 +334,8 @@ export interface ReminderEntryForm {
   season_number?: number | null;
   episode_number?: number | null;
   episode_name?: string | null;
+  /** 每多少天更新一集；为空表示不重复 */
+  repeat_days?: number | null;
   notes?: string | null;
 }
 
@@ -336,6 +351,7 @@ export interface ReminderEditPrefill {
   season?: number | null;
   episode?: number | null;
   episodeName?: string | null;
+  repeatDays?: number | null;
   notes?: string | null;
 }
 

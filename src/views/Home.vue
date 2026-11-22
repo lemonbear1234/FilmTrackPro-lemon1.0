@@ -341,7 +341,7 @@
                     v-if="item.source === 'manual'"
                     type="button"
                     class="update-reminder-action"
-                    title="编辑这条提醒"
+                    :title="isCycleOccurrence(item) ? '编辑整条周期提醒' : '编辑这条提醒'"
                     @click.stop="openEditReminder(item)"
                   >
                     <PencilIcon class="w-3.5 h-3.5" />
@@ -349,7 +349,7 @@
                   <button
                     type="button"
                     class="update-reminder-action update-reminder-action-danger"
-                    :title="item.source === 'manual' ? '删除这条提醒' : '忽略这条提醒'"
+                    :title="getRemovalActionLabel(item)"
                     @click.stop="askRemoveReminder(item)"
                   >
                     <XIcon class="w-3.5 h-3.5" />
@@ -366,6 +366,9 @@
                   <p class="update-reminder-title">
                     <span class="update-reminder-title-text">{{ item.title }}</span>
                     <span v-if="item.source === 'manual'" class="update-reminder-badge">手动</span>
+                    <span v-if="getCycleLabel(item)" class="update-reminder-badge update-reminder-badge-cycle">
+                      {{ getCycleLabel(item) }}
+                    </span>
                   </p>
                   <div class="update-reminder-meta">
                     <span class="update-reminder-episode">{{ getReminderEpisodeLabel(item) }}</span>
@@ -532,11 +535,9 @@
     <Modal
       :is-open="Boolean(reminderPendingRemoval)"
       type="confirm"
-      :title="reminderPendingRemoval?.source === 'manual' ? '删除这条提醒？' : '忽略这条提醒？'"
-      :message="reminderPendingRemoval?.source === 'manual'
-        ? '手动添加的提醒删掉就没了，之后不会再出现。'
-        : '忽略后这条自动提醒不会再出现，TMDb 数据变化也不会覆盖这个选择。'"
-      :confirm-text="reminderPendingRemoval?.source === 'manual' ? '删除' : '忽略'"
+      :title="reminderRemovalCopy.title"
+      :message="reminderRemovalCopy.message"
+      :confirm-text="reminderRemovalCopy.confirmText"
       show-cancel
       @close="reminderPendingRemoval = null"
       @cancel="reminderPendingRemoval = null"
@@ -631,17 +632,74 @@ const openAddReminder = async () => {
   reminderModalOpen.value = true
 }
 
+// 周期提醒里按周期自动补出来的场次（不是用户当初填的那一集）
+const isCycleOccurrence = (item: TVEpisodeReminder) =>
+  item.source === 'manual' && (item.occurrence_sequence ?? 0) > 0
+
+// 卡片上的周期标记，没有周期就不显示
+const getCycleLabel = (item: TVEpisodeReminder) => {
+  const days = item.repeat_days ?? 0
+  if (item.source !== 'manual' || days < 1) return ''
+  if (days === 1) return '每天'
+  if (days === 7) return '每周'
+  if (days === 14) return '每两周'
+  if (days === 30) return '每月'
+  return `每 ${days} 天`
+}
+
+const getRemovalActionLabel = (item: TVEpisodeReminder) => {
+  if (isCycleOccurrence(item)) return '跳过这一集'
+  return item.source === 'manual' ? '删除这条提醒' : '忽略这条提醒'
+}
+
+const reminderRemovalCopy = computed(() => {
+  const item = reminderPendingRemoval.value
+  if (!item) return { title: '', message: '', confirmText: '确定' }
+
+  if (isCycleOccurrence(item)) {
+    return {
+      title: '跳过这一集？',
+      message: '只跳过这一集，周期提醒里的其他集数还会照常出现。',
+      confirmText: '跳过'
+    }
+  }
+
+  if (item.source === 'manual') {
+    const days = item.repeat_days ?? 0
+    return days >= 1
+      ? {
+          title: '删除这条周期提醒？',
+          message: `删掉后整条周期提醒都没了，按每 ${days} 天自动补出来的后续集数也会一起消失。`,
+          confirmText: '删除'
+        }
+      : {
+          title: '删除这条提醒？',
+          message: '手动添加的提醒删掉就没了，之后不会再出现。',
+          confirmText: '删除'
+        }
+  }
+
+  return {
+    title: '忽略这条提醒？',
+    message: '忽略后这条自动提醒不会再出现，TMDb 数据变化也不会覆盖这个选择。',
+    confirmText: '忽略'
+  }
+})
+
 const openEditReminder = async (item: TVEpisodeReminder) => {
+  // 自动补出来的场次用「原点」还原成用户填的那一集，免得把周期起点改到未来
+  const base = item.cycle_base
   reminderPrefill.value = {
     entryId: item.entry_id,
     movieId: item.movie_id?.startsWith('manual-') ? null : item.movie_id,
     title: item.title,
     tmdbId: item.tmdb_id ?? null,
     posterPath: item.poster_path ?? null,
-    airDate: item.air_date,
-    season: item.season_number ?? null,
-    episode: item.episode_number ?? null,
-    episodeName: item.episode_name ?? null,
+    airDate: base?.air_date ?? item.air_date,
+    season: base ? base.season_number ?? null : item.season_number ?? null,
+    episode: base ? base.episode_number ?? null : item.episode_number ?? null,
+    episodeName: base ? base.episode_name ?? null : item.episode_name ?? null,
+    repeatDays: item.repeat_days ?? 0,
     notes: item.notes ?? null
   }
   await loadReminderMovieOptions()
@@ -679,7 +737,13 @@ const confirmRemoveReminder = async () => {
     return
   }
 
-  toast.success(target.source === 'manual' ? '提醒已删除' : '已忽略这条提醒')
+  toast.success(
+    isCycleOccurrence(target)
+      ? '已跳过这一集'
+      : target.source === 'manual'
+        ? '提醒已删除'
+        : '已忽略这条提醒'
+  )
   await reloadReminderList()
 }
 
@@ -994,6 +1058,11 @@ onMounted(() => {
   font-size: 0.62rem;
   font-weight: 500;
   color: #1d4ed8;
+}
+
+.update-reminder-badge-cycle {
+  background: rgba(224, 231, 255, 0.9);
+  color: #4338ca;
 }
 
 .update-reminder-meta {

@@ -17,6 +17,7 @@ import type {
 } from '../types';
 import { databaseAPI } from './database-api';
 import { tmdbAPI } from '../utils/api';
+import { addDaysToDate, daysFromToday } from '../utils/date';
 
 interface ReminderOptions {
   /** 向后查看多少天，默认 7 */
@@ -28,6 +29,15 @@ interface ReminderOptions {
 
 /** 手动提醒里「已播出」的保留天数，方便用户回头删掉，不做成永久堆积 */
 const PAST_MANUAL_KEEP_DAYS = 30;
+
+/** 周期提醒向前补齐的天数上限，避免一条周期条目铺满整个列表 */
+const CYCLE_LOOKAHEAD_DAYS = 120;
+
+/** 一条周期提醒最多显示几场（含用户填的那一集） */
+const CYCLE_MAX_OCCURRENCES = 6;
+
+/** 极端周期（例如每天更新 + 很久以前的首播日）时循环的硬上限 */
+const CYCLE_MAX_STEPS = 200;
 
 class TVReminderService {
   private defaultRange = 7; // 默认查找未来7天内的更新
@@ -148,9 +158,102 @@ class TVReminderService {
     return reminders;
   }
 
+  /** 把一条手动条目转成列表项（周期提醒的每一场也走这里） */
+  private buildManualReminder(
+    entry: ReminderEntry,
+    linkedMovie: Movie | undefined,
+    options: {
+      airDate?: string;
+      seasonNumber?: number | null;
+      episodeNumber?: number | null;
+      episodeName?: string | null;
+      sequence?: number;
+      repeatDays?: number | null;
+    } = {}
+  ): TVEpisodeReminder {
+    const airDate = options.airDate ?? entry.air_date;
+    const sequence = options.sequence ?? 0;
+
+    return {
+      movie_id: entry.movie_id || `manual-${entry.id}`,
+      tmdb_id: entry.tmdb_id ?? linkedMovie?.tmdb_id ?? undefined,
+      title: entry.title,
+      status: linkedMovie?.status ?? 'watching',
+      poster_path: entry.poster_path || linkedMovie?.poster_path || null,
+      air_date: airDate,
+      season_number: (options.seasonNumber ?? entry.season_number) ?? undefined,
+      episode_number: (options.episodeNumber ?? entry.episode_number) ?? undefined,
+      episode_name: options.episodeName ?? entry.episode_name ?? null,
+      overview: null,
+      still_path: null,
+      source: 'manual',
+      entry_id: entry.id,
+      notes: entry.notes ?? null,
+      repeat_days: options.repeatDays ?? entry.repeat_days ?? null,
+      occurrence_sequence: sequence,
+      // 自动补出来的场次带上原点信息，编辑时还原成用户填的那一集
+      cycle_base: sequence > 0
+        ? {
+            air_date: entry.air_date,
+            season_number: entry.season_number ?? null,
+            episode_number: entry.episode_number ?? null,
+            episode_name: entry.episode_name ?? null
+          }
+        : undefined,
+      is_past: this.isPastDate(airDate)
+    };
+  }
+
+  /**
+   * 周期提醒：从用户填的那一集开始，按 repeat_days 逐集向后推导
+   *
+   * - 只保留今天及以后的场次（已经播过的自动收起，免得列表越滚越长）
+   * - 最多 6 场、最多看 120 天，超出范围自然停下
+   * - 集数跟着场次 +1，季数沿用；集名为空，避免把第一集的标题套到后面
+   */
+  private expandCycleEntry(entry: ReminderEntry, linkedMovie?: Movie): TVEpisodeReminder[] {
+    const repeatDays = Math.floor(Number(entry.repeat_days ?? 0));
+    if (!Number.isFinite(repeatDays) || repeatDays < 1) {
+      return [];
+    }
+
+    const baseOffset = daysFromToday(entry.air_date);
+    if (Number.isNaN(baseOffset)) {
+      return [];
+    }
+
+    // 首播日已经过去很久时直接跳到今天的下一场，不用一场一场空转
+    let sequence = baseOffset >= 0 ? 0 : Math.ceil(-baseOffset / repeatDays);
+    const baseEpisode = entry.episode_number ?? null;
+    const occurrences: TVEpisodeReminder[] = [];
+
+    for (let step = 0; step < CYCLE_MAX_STEPS && occurrences.length < CYCLE_MAX_OCCURRENCES; step += 1) {
+      const airDate = addDaysToDate(entry.air_date, sequence * repeatDays);
+      const offset = daysFromToday(airDate);
+      if (Number.isNaN(offset) || offset > CYCLE_LOOKAHEAD_DAYS) {
+        break;
+      }
+
+      occurrences.push(
+        this.buildManualReminder(entry, linkedMovie, {
+          airDate,
+          episodeNumber: baseEpisode === null ? null : baseEpisode + sequence,
+          episodeName: sequence === 0 ? entry.episode_name ?? null : null,
+          sequence,
+          repeatDays
+        })
+      );
+
+      sequence += 1;
+    }
+
+    return occurrences;
+  }
+
   /**
    * 用户手动添加的提醒
    * 不受「未来 N 天」范围限制——自己加的日期应该一定看得见
+   * 设置了更新周期的条目，会在这里展开成后续几集
    */
   private async collectManualReminders(): Promise<TVEpisodeReminder[]> {
     const [manualResult, moviesResult] = await Promise.all([
@@ -179,30 +282,20 @@ class TVReminderService {
     const reminders: TVEpisodeReminder[] = [];
 
     entries.forEach(entry => {
+      const linkedMovie = entry.movie_id ? movieMap.get(entry.movie_id) : undefined;
+      const repeatDays = Number(entry.repeat_days ?? 0);
+
+      if (Number.isFinite(repeatDays) && repeatDays >= 1) {
+        reminders.push(...this.expandCycleEntry(entry, linkedMovie));
+        return;
+      }
+
       const airTime = new Date(entry.air_date).getTime();
       if (Number.isNaN(airTime) || airTime < cutoff.getTime()) {
         return;
       }
 
-      const linkedMovie = entry.movie_id ? movieMap.get(entry.movie_id) : undefined;
-
-      reminders.push({
-        movie_id: entry.movie_id || `manual-${entry.id}`,
-        tmdb_id: entry.tmdb_id ?? linkedMovie?.tmdb_id ?? undefined,
-        title: entry.title,
-        status: linkedMovie?.status ?? 'watching',
-        poster_path: entry.poster_path || linkedMovie?.poster_path || null,
-        air_date: entry.air_date,
-        season_number: entry.season_number ?? undefined,
-        episode_number: entry.episode_number ?? undefined,
-        episode_name: entry.episode_name ?? null,
-        overview: null,
-        still_path: null,
-        source: 'manual',
-        entry_id: entry.id,
-        notes: entry.notes ?? null,
-        is_past: this.isPastDate(entry.air_date)
-      });
+      reminders.push(this.buildManualReminder(entry, linkedMovie));
     });
 
     return reminders;
@@ -237,7 +330,12 @@ class TVReminderService {
         return !dismissedKeys.has(key) && !manualKeys.has(key);
       });
 
-      const merged = [...autoFiltered, ...manualReminders];
+      // 周期提醒里单独跳过的那几场，也要按忽略标记过滤掉
+      const manualFiltered = manualReminders.filter(
+        item => !dismissedKeys.has(this.buildKey(item.movie_id, item.air_date, item.episode_number))
+      );
+
+      const merged = [...autoFiltered, ...manualFiltered];
 
       // 未来条目按日期升序在前，已播出的手动提醒沉到最后（倒序，最近的在前）
       merged.sort((left, right) => {
@@ -390,10 +488,12 @@ class TVReminderService {
 
   /**
    * 删除/忽略一条提醒
-   * 手动条目是真删除，自动条目是记一个忽略标记
+   * - 周期提醒里自动补出来的场次：只记一个忽略标记，跳过这一集
+   * - 手动条目本身：真删除（整条周期提醒一起没了）
+   * - 自动条目：记忽略标记
    */
   public async dismissReminder(item: TVEpisodeReminder): Promise<ApiResponse<string>> {
-    if (item.source === 'manual' && item.entry_id) {
+    if (item.source === 'manual' && item.entry_id && !item.occurrence_sequence) {
       return this.deleteReminder(item.entry_id);
     }
 

@@ -13,7 +13,7 @@ type Migration = {
   up: (db: Awaited<ReturnType<typeof DatabaseConnection.getRawInstance>>) => Promise<void>
 }
 
-const LATEST_SCHEMA_VERSION = 4
+const LATEST_SCHEMA_VERSION = 5
 
 const MOVIES_TABLE_SQL = `CREATE TABLE IF NOT EXISTS movies (
   id TEXT PRIMARY KEY,
@@ -99,6 +99,9 @@ const MOVIE_PLAYBACK_PROGRESS_TABLE_SQL = `CREATE TABLE IF NOT EXISTS movie_play
  * 更新提醒条目表
  * source = 'manual'    用户手动添加的提醒（TMDb 拉不到、或日期不准时自己填）
  * source = 'dismissed' 对某条自动提醒的「忽略」标记，按 作品+日期+集数 去重
+ *
+ * repeat_days：手动提醒的更新周期（天）。为空表示只提醒这一集；
+ * 有值时后续集数按周期自动推导，不用一集一集添加。
  */
 const REMINDER_ENTRIES_TABLE_SQL = `CREATE TABLE IF NOT EXISTS reminder_entries (
   id TEXT PRIMARY KEY,
@@ -111,6 +114,7 @@ const REMINDER_ENTRIES_TABLE_SQL = `CREATE TABLE IF NOT EXISTS reminder_entries 
   season_number INTEGER,
   episode_number INTEGER,
   episode_name TEXT,
+  repeat_days INTEGER,
   notes TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -182,6 +186,11 @@ const MOVIE_PLAYBACK_PROGRESS_COLUMN_MIGRATIONS = [
   'ALTER TABLE movie_playback_progress ADD COLUMN last_played_at TEXT',
   'ALTER TABLE movie_playback_progress ADD COLUMN created_at TEXT',
   'ALTER TABLE movie_playback_progress ADD COLUMN updated_at TEXT'
+] as const
+
+/** 提醒表后续补的字段（老库缺列时逐条补上） */
+const REMINDER_ENTRIES_COLUMN_MIGRATIONS = [
+  'ALTER TABLE reminder_entries ADD COLUMN repeat_days INTEGER'
 ] as const
 
 const INDEX_COMMANDS = [
@@ -302,6 +311,15 @@ export class DatabaseSchema {
         await this.executeIgnoreDuplicate(db, REMINDER_ENTRIES_TABLE_SQL)
         await this.ensureIndexes(db)
       }
+    },
+    {
+      version: 5,
+      name: 'reminder-repeat-days',
+      up: async (db) => {
+        await this.executeIgnoreDuplicate(db, REMINDER_ENTRIES_TABLE_SQL)
+        await this.ensureReminderEntryColumns(db)
+        await this.ensureIndexes(db)
+      }
     }
   ]
 
@@ -418,6 +436,14 @@ export class DatabaseSchema {
     db: Awaited<ReturnType<typeof DatabaseConnection.getRawInstance>>
   ): Promise<void> {
     for (const command of MOVIE_PLAYBACK_PROGRESS_COLUMN_MIGRATIONS) {
+      await this.executeIgnoreDuplicate(db, command)
+    }
+  }
+
+  private static async ensureReminderEntryColumns(
+    db: Awaited<ReturnType<typeof DatabaseConnection.getRawInstance>>
+  ): Promise<void> {
+    for (const command of REMINDER_ENTRIES_COLUMN_MIGRATIONS) {
       await this.executeIgnoreDuplicate(db, command)
     }
   }

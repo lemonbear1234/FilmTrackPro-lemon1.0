@@ -219,15 +219,15 @@ describe('DatabaseSchema.ensureTableStructure', () => {
     assert.equal(backupCount, 1)
     assert.equal(
       executeCalls.filter(([sql]) => sql === 'BEGIN TRANSACTION').length,
-      4
+      5
     )
     assert.equal(
       executeCalls.filter(([sql]) => sql === 'COMMIT').length,
-      4
+      5
     )
     assert.equal(
       executeCalls.filter(([sql]) => sql.includes('INSERT INTO schema_migrations')).length,
-      4
+      5
     )
   })
 
@@ -239,7 +239,7 @@ describe('DatabaseSchema.ensureTableStructure', () => {
     }
     dbMock.select = async (sql) => {
       if (String(sql).includes('SELECT version FROM schema_migrations')) {
-        return [{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }]
+        return [{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }]
       }
       return []
     }
@@ -284,11 +284,11 @@ describe('DatabaseSchema.ensureTableStructure', () => {
     assert.equal(warningCalls.length, 1)
     assert.equal(
       executeCalls.filter(([sql]) => sql === 'BEGIN TRANSACTION').length,
-      4
+      5
     )
     assert.equal(
       executeCalls.filter(([sql]) => sql === 'COMMIT').length,
-      4
+      5
     )
   })
 

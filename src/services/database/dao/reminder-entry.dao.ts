@@ -14,7 +14,7 @@ import { DatabaseUtils } from '../utils';
 type ReminderEntryRow = DatabaseRow & ReminderEntry;
 
 const SELECT_COLUMNS = `id, source, movie_id, title, tmdb_id, poster_path,
-  air_date, season_number, episode_number, episode_name, notes, created_at, updated_at`;
+  air_date, season_number, episode_number, episode_name, repeat_days, notes, created_at, updated_at`;
 
 export class ReminderEntryDAO {
   /** 获取全部手动添加的提醒（按播出日期升序） */
@@ -58,8 +58,8 @@ export class ReminderEntryDAO {
       await db.execute(
         `INSERT INTO reminder_entries (
           id, source, movie_id, title, tmdb_id, poster_path,
-          air_date, season_number, episode_number, episode_name, notes, created_at, updated_at
-        ) VALUES ($1, 'manual', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+          air_date, season_number, episode_number, episode_name, repeat_days, notes, created_at, updated_at
+        ) VALUES ($1, 'manual', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           id,
           form.movie_id || null,
@@ -70,6 +70,7 @@ export class ReminderEntryDAO {
           form.season_number ?? null,
           form.episode_number ?? null,
           form.episode_name || null,
+          form.repeat_days ?? null,
           form.notes || null,
           timestamp,
           timestamp
@@ -104,8 +105,8 @@ export class ReminderEntryDAO {
         `UPDATE reminder_entries SET
           movie_id = $1, title = $2, tmdb_id = $3, poster_path = $4,
           air_date = $5, season_number = $6, episode_number = $7,
-          episode_name = $8, notes = $9, updated_at = $10
-        WHERE id = $11 AND source = 'manual'`,
+          episode_name = $8, repeat_days = $9, notes = $10, updated_at = $11
+        WHERE id = $12 AND source = 'manual'`,
         [
           form.movie_id || null,
           form.title,
@@ -115,6 +116,7 @@ export class ReminderEntryDAO {
           form.season_number ?? null,
           form.episode_number ?? null,
           form.episode_name || null,
+          form.repeat_days ?? null,
           form.notes || null,
           timestamp,
           id
