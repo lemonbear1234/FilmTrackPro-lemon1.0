@@ -1,105 +1,112 @@
 <template>
-  <TransitionRoot appear :show="isOpen" as="template">
-    <Dialog as="div" @close="closeModal" class="relative z-50">
-      <TransitionChild
-        as="template"
-        enter="duration-300 ease-out"
-        enter-from="opacity-0"
-        enter-to="opacity-100"
-        leave="duration-200 ease-in"
-        leave-from="opacity-100"
-        leave-to="opacity-0"
-      >
-        <div class="fixed inset-0 bg-black/30 backdrop-blur-sm" />
-      </TransitionChild>
-
-      <div class="fixed inset-0 overflow-y-auto">
-        <div
-          class="flex min-h-full items-center justify-center p-4 text-center"
+  <!--
+    Teleport 到 body：详情页侧栏等容器带 transform 动画（animate-slide-in-right），
+    祖先只要有 transform，子级的 position: fixed 就会以该祖先为包含块，
+    弹窗会被压进侧栏卡片里、被裁剪或完全看不见（表现为「点编辑没反应」）。
+  -->
+  <Teleport to="body">
+    <TransitionRoot appear :show="isOpen" as="template">
+      <Dialog as="div" @close="closeModal" class="relative z-50">
+        <TransitionChild
+          as="template"
+          enter="duration-300 ease-out"
+          enter-from="opacity-0"
+          enter-to="opacity-100"
+          leave="duration-200 ease-in"
+          leave-from="opacity-100"
+          leave-to="opacity-0"
         >
-          <TransitionChild
-            as="template"
-            enter="duration-300 ease-out"
-            enter-from="opacity-0 scale-95"
-            enter-to="opacity-100 scale-100"
-            leave="duration-200 ease-in"
-            leave-from="opacity-100 scale-100"
-            leave-to="opacity-0 scale-95"
+          <div class="fixed inset-0 bg-black/30 backdrop-blur-sm" />
+        </TransitionChild>
+
+        <div class="fixed inset-0 overflow-y-auto">
+          <div
+            class="flex min-h-full items-center justify-center p-4 text-center"
           >
-            <DialogPanel
-              :class="[
-                'w-full max-h-[min(92vh,960px)] transform overflow-hidden rounded-2xl bg-white backdrop-blur-xl border border-gray-200/50 text-left align-middle shadow-2xl transition-all flex flex-col',
-                props.large ? 'max-w-4xl' : 'max-w-md',
-                props.panelClass,
-              ]"
+            <TransitionChild
+              as="template"
+              enter="duration-300 ease-out"
+              enter-from="opacity-0 scale-95"
+              enter-to="opacity-100 scale-100"
+              leave="duration-200 ease-in"
+              leave-from="opacity-100 scale-100"
+              leave-to="opacity-0 scale-95"
             >
-              <div
+              <DialogPanel
                 :class="[
-                  'flex items-center border-b border-gray-100 px-6 py-5',
-                  !title && !iconComponent ? 'hidden' : '',
+                  'w-full max-h-[min(92vh,960px)] transform overflow-hidden rounded-2xl bg-white backdrop-blur-xl border border-gray-200/50 text-left align-middle shadow-2xl transition-all flex flex-col',
+                  props.large ? 'max-w-4xl' : 'max-w-md',
+                  props.panelClass,
                 ]"
               >
-                <DialogTitle
-                  as="h3"
-                  class="text-lg font-semibold leading-6 text-gray-900 flex items-center"
-                >
-                  <component
-                    :is="iconComponent"
-                    v-if="iconComponent"
-                    :class="iconClass"
-                    class="mr-3 w-5 h-5"
-                  />
-                  {{ title }}
-                </DialogTitle>
-              </div>
-
-              <div
-                :class="[
-                  'min-h-0 flex-1 overflow-y-auto px-6 py-5',
-                  props.contentClass,
-                ]"
-              >
-                <slot name="content">
-                  <p class="text-sm text-gray-600 leading-relaxed">
-                    {{ message }}
-                  </p>
-                </slot>
-              </div>
-
-              <div
-                :class="[
-                  'flex shrink-0 justify-end space-x-3 border-t border-gray-100 bg-white px-6 py-4',
-                  props.footerClass,
-                ]"
-              >
-                <button
-                  v-if="showCancel"
-                  type="button"
-                  class="inline-flex justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
-                  @click="handleCancel"
-                >
-                  {{ cancelText }}
-                </button>
-
-                <button
-                  type="button"
+                <div
                   :class="[
-                    'inline-flex justify-center rounded-xl border border-transparent px-4 py-2 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors duration-200',
-                    confirmButtonClass,
-                    { 'opacity-50 cursor-not-allowed': confirmDisabled }
+                    'flex items-center border-b border-gray-100 px-6 py-5',
+                    !title && !iconComponent ? 'hidden' : '',
                   ]"
-                  :disabled="confirmDisabled"
-                  @click="handleConfirm"
                 >
-                  {{ confirmText }}
-                </button>
-              </div>
-            </DialogPanel>
-          </TransitionChild>
+                  <DialogTitle
+                    as="h3"
+                    class="text-lg font-semibold leading-6 text-gray-900 flex items-center"
+                  >
+                    <component
+                      :is="iconComponent"
+                      v-if="iconComponent"
+                      :class="iconClass"
+                      class="mr-3 w-5 h-5"
+                    />
+                    {{ title }}
+                  </DialogTitle>
+                </div>
+
+                <div
+                  :class="[
+                    'min-h-0 flex-1 overflow-y-auto px-6 py-5',
+                    props.contentClass,
+                  ]"
+                >
+                  <slot name="content">
+                    <p class="text-sm text-gray-600 leading-relaxed">
+                      {{ message }}
+                    </p>
+                  </slot>
+                </div>
+
+                <div
+                  :class="[
+                    'flex shrink-0 justify-end space-x-3 border-t border-gray-100 bg-white px-6 py-4',
+                    props.footerClass,
+                  ]"
+                >
+                  <button
+                    v-if="showCancel"
+                    type="button"
+                    class="inline-flex justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
+                    @click="handleCancel"
+                  >
+                    {{ cancelText }}
+                  </button>
+
+                  <button
+                    type="button"
+                    :class="[
+                      'inline-flex justify-center rounded-xl border border-transparent px-4 py-2 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors duration-200',
+                      confirmButtonClass,
+                      { 'opacity-50 cursor-not-allowed': confirmDisabled }
+                    ]"
+                    :disabled="confirmDisabled"
+                    @click="handleConfirm"
+                  >
+                    {{ confirmText }}
+                  </button>
+                </div>
+              </DialogPanel>
+            </TransitionChild>
+          </div>
         </div>
-      </div>
-    </Dialog>
-  </TransitionRoot>
+      </Dialog>
+    </TransitionRoot>
+  </Teleport>
 </template>
 
 <script setup lang="ts">

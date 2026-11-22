@@ -63,7 +63,9 @@ defineEmits<Emits>();
   gap: 1.25rem;
 }
 
-/* 右侧滑入动画 */
+/* 右侧滑入动画
+   注意：to 里不要再写 transform。forwards 会让 transform: translateX(0) 永久留在元素上，
+   而祖先只要有 transform，子级的 position: fixed 就以它为包含块 —— 弹窗会被压进侧栏里。 */
 @keyframes slide-in-right {
   from {
     opacity: 0;
@@ -71,7 +73,6 @@ defineEmits<Emits>();
   }
   to {
     opacity: 1;
-    transform: translateX(0);
   }
 }
 
