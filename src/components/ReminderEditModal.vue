@@ -120,7 +120,7 @@
           </div>
         </div>
 
-        <div :class="isMovie ? '' : 'grid grid-cols-1 sm:grid-cols-2 gap-4'">
+        <div :class="isMovie ? '' : 'space-y-3'">
           <div>
             <label class="reminder-label">{{ isMovie ? '上映日期' : '播出日期' }}</label>
             <DateField
@@ -129,7 +129,7 @@
               @update:model-value="dateTouched = true"
             />
           </div>
-          <div v-if="!isMovie" class="grid grid-cols-3 gap-2">
+          <div v-if="!isMovie" class="grid grid-cols-3 gap-3">
             <div>
               <label class="reminder-label">季</label>
               <TextField v-model="seasonInput" type="number" input-mode="numeric" placeholder="如 8" />
