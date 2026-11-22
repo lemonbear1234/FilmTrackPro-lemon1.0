@@ -164,9 +164,7 @@ class TVReminderService {
     linkedMovie: Movie | undefined,
     options: {
       airDate?: string;
-      seasonNumber?: number | null;
       episodeNumber?: number | null;
-      episodeName?: string | null;
       sequence?: number;
       repeatDays?: number | null;
     } = {}
@@ -181,9 +179,10 @@ class TVReminderService {
       status: linkedMovie?.status ?? 'watching',
       poster_path: entry.poster_path || linkedMovie?.poster_path || null,
       air_date: airDate,
-      season_number: (options.seasonNumber ?? entry.season_number) ?? undefined,
+      season_number: entry.season_number ?? undefined,
       episode_number: (options.episodeNumber ?? entry.episode_number) ?? undefined,
-      episode_name: options.episodeName ?? entry.episode_name ?? null,
+      // 用户填的集标题只属于那一集，自动补出来的场次不要沿用
+      episode_name: sequence > 0 ? null : entry.episode_name ?? null,
       overview: null,
       still_path: null,
       source: 'manual',
@@ -238,7 +237,6 @@ class TVReminderService {
         this.buildManualReminder(entry, linkedMovie, {
           airDate,
           episodeNumber: baseEpisode === null ? null : baseEpisode + sequence,
-          episodeName: sequence === 0 ? entry.episode_name ?? null : null,
           sequence,
           repeatDays
         })

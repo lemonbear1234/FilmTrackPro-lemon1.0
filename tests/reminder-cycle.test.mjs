@@ -77,6 +77,13 @@ describe('更新提醒：更新周期', () => {
       assert.ok(/occurrence_sequence\?: number/.test(types), '列表项缺场次序号')
       assert.ok(/cycle_base\?:/.test(types), '列表项缺周期原点，编辑时无法还原首播日')
     })
+
+    it('集标题只属于用户填的那一集', () => {
+      assert.ok(
+        /episode_name: sequence > 0 \? null : entry\.episode_name \?\? null/.test(service),
+        '自动补出的场次不应沿用第一集的标题'
+      )
+    })
   })
 
   describe('服务层展开', () => {
