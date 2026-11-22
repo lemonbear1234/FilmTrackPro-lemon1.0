@@ -319,6 +319,16 @@ export class DatabaseApiService {
     return ReminderEntryDAO.deleteEntry(id);
   }
 
+  /** 批量删除手动提醒（清空已播出） */
+  static async deleteManualReminders(ids: string[]): Promise<ApiResponse<number>> {
+    return ReminderEntryDAO.deleteEntries(ids);
+  }
+
+  /** 清理过期的手动提醒 */
+  static async purgeExpiredReminders(beforeDate: string): Promise<ApiResponse<number>> {
+    return ReminderEntryDAO.purgeExpiredEntries(beforeDate);
+  }
+
   /** 忽略一条自动提醒 */
   static async dismissAutoReminder(payload: {
     movieId: string;
@@ -364,6 +374,8 @@ export const databaseAPI = {
   addManualReminder: DatabaseApiService.addManualReminder,
   updateManualReminder: DatabaseApiService.updateManualReminder,
   deleteManualReminder: DatabaseApiService.deleteManualReminder,
+  deleteManualReminders: DatabaseApiService.deleteManualReminders,
+  purgeExpiredReminders: DatabaseApiService.purgeExpiredReminders,
   dismissAutoReminder: DatabaseApiService.dismissAutoReminder,
   beginTransaction: DatabaseApiService.beginTransaction,
   commitTransaction: DatabaseApiService.commitTransaction,

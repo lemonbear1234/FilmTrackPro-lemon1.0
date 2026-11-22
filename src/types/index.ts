@@ -292,6 +292,8 @@ export interface TVEpisodeReminder {
   notes?: string | null;
   /** 手动提醒的更新周期（天），为空表示只提醒这一集 */
   repeat_days?: number | null;
+  /** 电影还是剧集：电影没有季集与周期，卡片文案也不同 */
+  media_type?: MovieType | null;
   /** 周期提醒里第几场（0 = 用户填的那一集，>0 = 按周期自动补出来的） */
   occurrence_sequence?: number;
   /** 周期提醒的「原点」：自动补出来的场次靠它还原首播日/首集，编辑时才不会改错 */
@@ -319,6 +321,7 @@ export interface ReminderEntry {
   episode_name?: string | null;
   /** 每多少天更新一集；为空表示不重复 */
   repeat_days?: number | null;
+  media_type?: MovieType | null;
   notes?: string | null;
   created_at: string;
   updated_at: string;
@@ -336,6 +339,7 @@ export interface ReminderEntryForm {
   episode_name?: string | null;
   /** 每多少天更新一集；为空表示不重复 */
   repeat_days?: number | null;
+  media_type?: MovieType | null;
   notes?: string | null;
 }
 
@@ -352,6 +356,7 @@ export interface ReminderEditPrefill {
   episode?: number | null;
   episodeName?: string | null;
   repeatDays?: number | null;
+  mediaType?: MovieType | null;
   notes?: string | null;
 }
 

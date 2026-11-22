@@ -17,7 +17,7 @@ import type {
 } from '../types';
 import { databaseAPI } from './database-api';
 import { tmdbAPI } from '../utils/api';
-import { addDaysToDate, daysFromToday } from '../utils/date';
+import { addDaysToDate, daysFromToday, todayLocalDate } from '../utils/date';
 
 interface ReminderOptions {
   /** 向后查看多少天，默认 7 */
@@ -27,8 +27,8 @@ interface ReminderOptions {
   forceRefresh?: boolean;
 }
 
-/** 手动提醒里「已播出」的保留天数，方便用户回头删掉，不做成永久堆积 */
-const PAST_MANUAL_KEEP_DAYS = 30;
+/** 手动提醒里「已播出」的保留天数：留一周方便回看，之后自动清掉 */
+const PAST_MANUAL_KEEP_DAYS = 7;
 
 /** 周期提醒向前补齐的天数上限，避免一条周期条目铺满整个列表 */
 const CYCLE_LOOKAHEAD_DAYS = 120;
@@ -189,6 +189,7 @@ class TVReminderService {
       entry_id: entry.id,
       notes: entry.notes ?? null,
       repeat_days: options.repeatDays ?? entry.repeat_days ?? null,
+      media_type: entry.media_type ?? linkedMovie?.type ?? null,
       occurrence_sequence: sequence,
       // 自动补出来的场次带上原点信息，编辑时还原成用户填的那一集
       cycle_base: sequence > 0
@@ -254,6 +255,13 @@ class TVReminderService {
    * 设置了更新周期的条目，会在这里展开成后续几集
    */
   private async collectManualReminders(): Promise<TVEpisodeReminder[]> {
+    // 先清掉早就播完的单集条目，避免它们在库里无声堆积（周期条目不动）
+    const purgeBefore = addDaysToDate(todayLocalDate(), -PAST_MANUAL_KEEP_DAYS);
+    const purgeResult = await databaseAPI.purgeExpiredReminders(purgeBefore);
+    if (!purgeResult.success) {
+      console.warn('清理过期提醒失败，不影响本次展示:', purgeResult.error);
+    }
+
     const [manualResult, moviesResult] = await Promise.all([
       databaseAPI.getManualReminders(),
       databaseAPI.getMovies()
@@ -416,10 +424,12 @@ class TVReminderService {
       };
     }
 
-    // 3. 本地没有，再去 TMDb 搜一次；搜不到就空着
+    // 3. 本地没有，再去 TMDb 搜一次；只接受标题确实对得上的结果，宁可不给海报也不张冠李戴
     try {
       const search = await tmdbAPI.searchMulti(form.title);
-      const first = search.success ? search.data?.results?.[0] : undefined;
+      const first = (search.success ? search.data?.results ?? [] : []).find(result =>
+        this.isTitleMatch(result.title ?? result.name, form.title)
+      );
       if (first) {
         return {
           ...form,
@@ -434,7 +444,19 @@ class TVReminderService {
     return form;
   }
 
-  /** 在本地影视库里按标题匹配（先精确、再不区分大小写包含） */
+  /** 标题比对：忽略标点与空白，允许「主标题 + 副标题」这种前缀展开 */
+  private isTitleMatch(candidate: string | null | undefined, keyword: string): boolean {
+    const normalize = (value: string) => value.toLowerCase().replace(/[\s·・:：\-—（）()《》「」]/g, '');
+    const target = normalize(keyword.trim());
+    const source = normalize((candidate ?? '').trim());
+    if (!target || !source) return false;
+    if (source === target) return true;
+
+    // 「复仇者联盟5」→「复仇者联盟5康之王朝」可以认，但「复仇者联盟」不算
+    return source.startsWith(target) && source.length - target.length <= 8;
+  }
+
+  /** 在本地影视库里按标题匹配（先精确、再前缀展开） */
   private async findLocalMovieByTitle(title: string): Promise<Movie | null> {
     const keyword = title.trim();
     if (!keyword) return null;
@@ -442,15 +464,7 @@ class TVReminderService {
     const result = await databaseAPI.getMovies();
     if (!result.success || !result.data) return null;
 
-    const exact = result.data.find(movie => movie.title === keyword);
-    if (exact) return exact;
-
-    const lower = keyword.toLowerCase();
-    const fuzzy = result.data.find(movie => movie.title?.toLowerCase().includes(lower));
-    if (fuzzy) return fuzzy;
-
-    // 反方向包含也算命中（用户只写了作品名的一部分）
-    return result.data.find(movie => lower.includes(movie.title?.toLowerCase() ?? '\u0000')) ?? null;
+    return result.data.find(movie => this.isTitleMatch(movie.title, keyword)) ?? null;
   }
 
   /** 新增手动提醒（自动补海报） */
@@ -459,10 +473,10 @@ class TVReminderService {
       return { success: false, error: '请先填写作品名称' };
     }
     if (!form.air_date) {
-      return { success: false, error: '请选择播出日期' };
+      return { success: false, error: '请选择日期' };
     }
 
-    const resolved = await this.resolveReminderPoster({ ...form, title: form.title.trim() });
+    const resolved = await this.resolveReminderPoster(this.normalizeForm({ ...form, title: form.title.trim() }));
     return databaseAPI.addManualReminder(resolved);
   }
 
@@ -472,16 +486,43 @@ class TVReminderService {
       return { success: false, error: '请先填写作品名称' };
     }
     if (!form.air_date) {
-      return { success: false, error: '请选择播出日期' };
+      return { success: false, error: '请选择日期' };
     }
 
-    const resolved = await this.resolveReminderPoster({ ...form, title: form.title.trim() });
+    const resolved = await this.resolveReminderPoster(this.normalizeForm({ ...form, title: form.title.trim() }));
     return databaseAPI.updateManualReminder(id, resolved);
+  }
+
+  /** 电影没有季集和更新周期，落库前统一抹掉，避免脏数据推算出奇怪的集数 */
+  private normalizeForm(form: ReminderEntryForm): ReminderEntryForm {
+    if (form.media_type !== 'movie') {
+      return form;
+    }
+
+    return {
+      ...form,
+      season_number: null,
+      episode_number: null,
+      repeat_days: null
+    };
   }
 
   /** 删除手动提醒 */
   public async deleteReminder(id: string): Promise<ApiResponse<string>> {
     return databaseAPI.deleteManualReminder(id);
+  }
+
+  /** 批量清空已播出的手动提醒（不动周期条目的原点） */
+  public async clearPastReminders(items: TVEpisodeReminder[]): Promise<ApiResponse<number>> {
+    const ids = Array.from(
+      new Set(items.filter(item => item.source === 'manual' && item.entry_id).map(item => item.entry_id as string))
+    );
+
+    if (ids.length === 0) {
+      return { success: true, data: 0 };
+    }
+
+    return databaseAPI.deleteManualReminders(ids);
   }
 
   /**

@@ -319,67 +319,54 @@
         />
 
         <div v-else class="space-y-6">
+          <!-- 未来：每天一列，四天一组横向排；同一天多部在列内往下叠 -->
           <div
-            v-for="group in reminderGroups"
-            :key="group.date"
-            class="space-y-3"
+            v-for="(chunk, chunkIndex) in upcomingChunks"
+            :key="`chunk-${chunkIndex}`"
+            class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-4 gap-y-6 items-start"
           >
-            <div class="flex items-center text-gray-700 font-medium">
-              <CalendarIcon class="w-4 h-4 mr-2 text-blue-500" />
-              <span>{{ formatReminderDate(group.date) }}</span>
-            </div>
-            <div class="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(248px,1fr))]">
-              <div
-                v-for="item in group.items"
-                :key="`${item.movie_id}-${item.air_date}-${item.episode_number ?? 'na'}`"
-                class="update-reminder-card"
-                :class="{ 'update-reminder-card-past': item.is_past }"
-                @click="handleReminderClick(item)"
-              >
-                <div class="update-reminder-actions">
-                  <button
-                    v-if="item.source === 'manual'"
-                    type="button"
-                    class="update-reminder-action"
-                    :title="isCycleOccurrence(item) ? '编辑整条周期提醒' : '编辑这条提醒'"
-                    @click.stop="openEditReminder(item)"
-                  >
-                    <PencilIcon class="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    class="update-reminder-action update-reminder-action-danger"
-                    :title="getRemovalActionLabel(item)"
-                    @click.stop="askRemoveReminder(item)"
-                  >
-                    <XIcon class="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <div class="update-reminder-poster">
-                  <CachedImage
-                    :src="getMovieImageURL(item.poster_path)"
-                    :alt="item.title"
-                    class-name="w-full h-full object-cover"
-                  />
-                </div>
-                <div class="update-reminder-info">
-                  <p class="update-reminder-title">
-                    <span class="update-reminder-title-text">{{ item.title }}</span>
-                    <span v-if="item.source === 'manual'" class="update-reminder-badge">手动</span>
-                    <span v-if="getCycleLabel(item)" class="update-reminder-badge update-reminder-badge-cycle">
-                      {{ getCycleLabel(item) }}
-                    </span>
-                  </p>
-                  <div class="update-reminder-meta">
-                    <span class="update-reminder-episode">{{ getReminderEpisodeLabel(item) }}</span>
-                    <span class="update-reminder-day" :class="{ 'update-reminder-day-past': item.is_past }">
-                      {{ item.is_past ? '已播出' : (getRelativeDayLabel(item.air_date) || '即将播出') }}
-                    </span>
-                  </div>
-                  <p v-if="item.episode_name" class="update-reminder-name">{{ item.episode_name }}</p>
-                  <p v-else-if="item.notes" class="update-reminder-name">{{ item.notes }}</p>
-                </div>
+            <div v-for="group in chunk" :key="group.date" class="reminder-day-column">
+              <div class="reminder-day-head">
+                <CalendarIcon class="w-4 h-4 text-blue-500" />
+                <span>{{ formatReminderDate(group.date) }}</span>
               </div>
+              <div class="space-y-3">
+                <ReminderCard
+                  v-for="item in group.items"
+                  :key="`${item.movie_id}-${item.air_date}-${item.episode_number ?? 'na'}`"
+                  :item="item"
+                  @open="handleReminderClick(item)"
+                  @edit="openEditReminder(item)"
+                  @remove="askRemoveReminder(item)"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- 已播出：默认折叠，只保留最近一周，可一键清空 -->
+          <div v-if="pastReminderItems.length > 0" class="reminder-past-section">
+            <div class="reminder-past-head">
+              <button type="button" class="reminder-past-toggle" @click="showPastReminders = !showPastReminders">
+                <ChevronRightIcon
+                  class="w-4 h-4 transition-transform duration-200"
+                  :class="{ 'rotate-90': showPastReminders }"
+                />
+                <span>已播出 · {{ pastReminderItems.length }} 条</span>
+                <span class="reminder-past-hint">保留最近 {{ PAST_KEEP_DAYS }} 天</span>
+              </button>
+              <button type="button" class="reminder-past-clear" @click="askClearPast">
+                清空已播出
+              </button>
+            </div>
+            <div v-if="showPastReminders" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-3">
+              <ReminderCard
+                v-for="item in pastReminderItems"
+                :key="`past-${item.movie_id}-${item.air_date}-${item.episode_number ?? 'na'}`"
+                :item="item"
+                @open="handleReminderClick(item)"
+                @edit="openEditReminder(item)"
+                @remove="askRemoveReminder(item)"
+              />
             </div>
           </div>
         </div>
@@ -530,6 +517,7 @@
       @close="reminderModalOpen = false"
       @saved="handleReminderSaved"
       @deleted="handleReminderDeleted"
+      @library-added="handleLibraryAdded"
     />
 
     <Modal
@@ -542,6 +530,18 @@
       @close="reminderPendingRemoval = null"
       @cancel="reminderPendingRemoval = null"
       @confirm="confirmRemoveReminder"
+    />
+
+    <Modal
+      :is-open="pastClearConfirmOpen"
+      type="confirm"
+      title="清空已播出的提醒？"
+      :message="`会把列表里 ${pastReminderItems.length} 条已播出的手动提醒全部删掉，周期提醒的原点不受影响。`"
+      confirm-text="清空"
+      show-cancel
+      @close="pastClearConfirmOpen = false"
+      @cancel="pastClearConfirmOpen = false"
+      @confirm="confirmClearPast"
     />
   </div>
 </template>
@@ -562,14 +562,14 @@ import {
   Clock as ClockIcon,
   BellRing as BellRingIcon,
   RefreshCcw as RefreshCcwIcon,
-  Pencil as PencilIcon,
-  X as XIcon,
+  ChevronRight as ChevronRightIcon,
 } from 'lucide-vue-next'
-import CachedImage from '../components/ui/CachedImage.vue'
 import Skeleton from '../components/common/Skeleton.vue'
 import EmptyState from '../components/common/EmptyState.vue'
+import CachedImage from '../components/ui/CachedImage.vue'
 import Modal from '../components/ui/Modal.vue'
 import ReminderEditModal from '../components/ReminderEditModal.vue'
+import ReminderCard from '../components/ReminderCard.vue'
 import { toast } from '../utils/toast'
 import { tvReminderService } from '../services/reminder'
 import type { TVEpisodeReminder, ReminderEditPrefill } from '../types'
@@ -607,7 +607,6 @@ const {
   getTotalWatchedEpisodes,
   getRelativeDayLabel,
   formatReminderDate,
-  formatEpisodeLabel,
   loadStatistics,
   loadWatchingMovies,
   loadReplayHistory,
@@ -636,21 +635,28 @@ const openAddReminder = async () => {
 const isCycleOccurrence = (item: TVEpisodeReminder) =>
   item.source === 'manual' && (item.occurrence_sequence ?? 0) > 0
 
-// 卡片上的周期标记，没有周期就不显示
-const getCycleLabel = (item: TVEpisodeReminder) => {
-  const days = item.repeat_days ?? 0
-  if (item.source !== 'manual' || days < 1) return ''
-  if (days === 1) return '每天'
-  if (days === 7) return '每周'
-  if (days === 14) return '每两周'
-  if (days === 30) return '每月'
-  return `每 ${days} 天`
-}
+/** 已播出的手动提醒保留一周，和 service 里的清理阈值保持一致 */
+const PAST_KEEP_DAYS = 7
+const showPastReminders = ref(false)
+const pastClearConfirmOpen = ref(false)
 
-const getRemovalActionLabel = (item: TVEpisodeReminder) => {
-  if (isCycleOccurrence(item)) return '跳过这一集'
-  return item.source === 'manual' ? '删除这条提醒' : '忽略这条提醒'
-}
+/** 未来的提醒：每个日期一组，四天凑成一行 */
+const upcomingChunks = computed(() => {
+  const groups = reminderGroups.value.filter(group => !group.items.every(item => item.is_past))
+  const chunks: typeof groups[] = []
+  for (let index = 0; index < groups.length; index += 4) {
+    chunks.push(groups.slice(index, index + 4))
+  }
+  return chunks
+})
+
+/** 已播出：统一收进底部折叠区，按日期倒序，最近的在前 */
+const pastReminderItems = computed(() =>
+  reminderGroups.value
+    .filter(group => group.items.every(item => item.is_past))
+    .flatMap(group => group.items)
+    .sort((left, right) => new Date(right.air_date).getTime() - new Date(left.air_date).getTime())
+)
 
 const reminderRemovalCopy = computed(() => {
   const item = reminderPendingRemoval.value
@@ -700,6 +706,7 @@ const openEditReminder = async (item: TVEpisodeReminder) => {
     episode: base ? base.episode_number ?? null : item.episode_number ?? null,
     episodeName: base ? base.episode_name ?? null : item.episode_name ?? null,
     repeatDays: item.repeat_days ?? 0,
+    mediaType: item.media_type ?? null,
     notes: item.notes ?? null
   }
   await loadReminderMovieOptions()
@@ -718,6 +725,30 @@ const handleReminderSaved = async (message: string) => {
 const handleReminderDeleted = async () => {
   reminderModalOpen.value = false
   toast.success('提醒已删除')
+  await reloadReminderList()
+}
+
+/** 弹窗里顺手往影视库加了一条，统计和「正在追剧」的候选都要跟着更新 */
+const handleLibraryAdded = async () => {
+  await Promise.all([loadStatistics(), loadReminderMovieOptions(true)])
+}
+
+const askClearPast = () => {
+  if (pastReminderItems.value.length === 0) return
+  pastClearConfirmOpen.value = true
+}
+
+const confirmClearPast = async () => {
+  const targets = [...pastReminderItems.value]
+  pastClearConfirmOpen.value = false
+
+  const result = await tvReminderService.clearPastReminders(targets)
+  if (!result.success) {
+    toast.error(result.error || '清空失败，请重试')
+    return
+  }
+
+  toast.success(`已清空 ${result.data ?? targets.length} 条已播出的提醒`)
   await reloadReminderList()
 }
 
@@ -755,15 +786,6 @@ const handleReminderClick = (item: TVEpisodeReminder) => {
   }
 
   navigateToDetail(item.movie_id)
-}
-
-// 手动提醒可能只填了日期，没有季集信息
-const getReminderEpisodeLabel = (item: TVEpisodeReminder) => {
-  if (item.season_number || item.episode_number) {
-    return formatEpisodeLabel(item.season_number, item.episode_number)
-  }
-
-  return item.source === 'manual' ? '播出提醒' : '新集即将上线'
 }
 
 // 刷新提醒：确实联网后才给反馈，避免「点了没反应」的错觉
@@ -946,161 +968,60 @@ onMounted(() => {
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
 }
 
-.update-reminder-card {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
-  padding: 0.7rem;
-  border: 1px solid rgba(243, 244, 246, 1);
-  border-radius: 0.85rem;
-  background: rgba(249, 250, 251, 0.6);
-  cursor: pointer;
-  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
-}
-
-.update-reminder-card:hover {
-  border-color: rgba(191, 219, 254, 1);
-  box-shadow: 0 12px 26px -20px rgba(15, 23, 42, 0.45);
-  transform: translateY(-2px);
-}
-
-.update-reminder-card-past {
-  opacity: 0.62;
-}
-
-.update-reminder-actions {
-  position: absolute;
-  top: 0.4rem;
-  right: 0.4rem;
-  display: flex;
-  gap: 0.25rem;
-  opacity: 0;
-  transition: opacity 160ms ease;
-  z-index: 2;
-}
-
-.update-reminder-card:hover .update-reminder-actions,
-.update-reminder-card:focus-within .update-reminder-actions {
-  opacity: 1;
-}
-
-.update-reminder-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.4rem;
-  height: 1.4rem;
-  border-radius: 9999px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  background: rgba(255, 255, 255, 0.95);
-  color: #64748b;
-  transition: color 140ms ease, border-color 140ms ease;
-}
-
-.update-reminder-action:hover {
-  color: #1d4ed8;
-  border-color: rgba(191, 219, 254, 1);
-}
-
-.update-reminder-action-danger:hover {
-  color: #dc2626;
-  border-color: rgba(254, 202, 202, 1);
-}
-
-.update-reminder-poster {
-  width: 3.5rem;
-  height: 5.25rem;
-  flex-shrink: 0;
-  border-radius: 0.5rem;
-  overflow: hidden;
-  background: #e5e7eb;
-}
-
-/* 海报图无论来自哪一层组件都铺满裁切，消除内联基线留白 */
-.update-reminder-poster :deep(img) {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.update-reminder-info {
-  flex: 1 1 auto;
-  min-width: 0;
+.reminder-day-column {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 0.3rem;
-}
-
-.update-reminder-title {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.92rem;
-  font-weight: 600;
-  color: #111827;
+  gap: 0.75rem;
   min-width: 0;
 }
 
-.update-reminder-title-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.update-reminder-badge {
-  flex-shrink: 0;
-  border-radius: 9999px;
-  background: rgba(219, 234, 254, 0.95);
-  padding: 0.05rem 0.4rem;
-  font-size: 0.62rem;
-  font-weight: 500;
-  color: #1d4ed8;
-}
-
-.update-reminder-badge-cycle {
-  background: rgba(224, 231, 255, 0.9);
-  color: #4338ca;
-}
-
-.update-reminder-meta {
+.reminder-day-head {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #334155;
 }
 
-.update-reminder-episode {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #2563eb;
-  white-space: nowrap;
+.reminder-past-section {
+  border-top: 1px dashed rgba(226, 232, 240, 1);
+  padding-top: 1rem;
 }
 
-.update-reminder-name {
-  font-size: 0.78rem;
-  color: #6b7280;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.reminder-past-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
-.update-reminder-day {
-  flex-shrink: 0;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: #2563eb;
-  background: rgba(219, 234, 254, 0.7);
-  border-radius: 999px;
-  padding: 0.05rem 0.45rem;
-  white-space: nowrap;
-}
-
-.update-reminder-day-past {
+.reminder-past-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 500;
   color: #64748b;
-  background: rgba(226, 232, 240, 0.8);
+}
+
+.reminder-past-toggle:hover {
+  color: #1d4ed8;
+}
+
+.reminder-past-hint {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: #94a3b8;
+}
+
+.reminder-past-clear {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.reminder-past-clear:hover {
+  color: #dc2626;
 }
 
 .stats-card {

@@ -20,6 +20,7 @@ const dao = read('src/services/database/dao/reminder-entry.dao.ts')
 const service = read('src/services/reminder.ts')
 const modal = read('src/components/ReminderEditModal.vue')
 const homeView = read('src/views/Home.vue')
+const cardView = read('src/components/ReminderCard.vue')
 const types = read('src/types/index.ts')
 const pkg = read('package.json')
 
@@ -58,15 +59,19 @@ describe('更新提醒：更新周期', () => {
         /ALTER TABLE reminder_entries ADD COLUMN repeat_days INTEGER/.test(schema),
         '缺少补列迁移'
       )
-      assert.ok(/LATEST_SCHEMA_VERSION = 5/.test(schema), '迁移版本应推进到 5')
+      assert.ok(/LATEST_SCHEMA_VERSION = 6/.test(schema), '迁移版本应推进到 6')
       assert.ok(
         /version: 5,[\s\S]{0,200}reminder-repeat-days/.test(schema),
         '缺少 v5 迁移'
       )
+      assert.ok(
+        /version: 6,[\s\S]{0,200}reminder-media-type/.test(schema),
+        '缺少 v6 迁移'
+      )
     })
 
     it('增改都会写周期字段', () => {
-      assert.ok(/episode_name, repeat_days, notes/.test(dao), '查询未取 repeat_days')
+      assert.ok(/repeat_days, media_type/.test(dao), '查询未取 repeat_days / media_type')
       assert.ok(/repeat_days = \$9/.test(dao), '更新未写 repeat_days')
       assert.ok(/form\.repeat_days \?\? null/.test(dao), '写入时应把 0/空值存成 NULL')
     })
@@ -158,15 +163,15 @@ describe('更新提醒：更新周期', () => {
 
     it('表单会把周期一起保存，单集存成空', () => {
       assert.ok(
-        /repeat_days: resolvedRepeatDays\.value >= 1 \? resolvedRepeatDays\.value : null/.test(modal),
+        /repeat_days: [^\n]*resolvedRepeatDays\.value >= 1 \? resolvedRepeatDays\.value : null/.test(modal),
         '周期应随表单落库'
       )
     })
 
     it('首页卡片显示周期，自动补的集数可单独跳过', () => {
-      assert.ok(/getCycleLabel/.test(homeView), '缺少周期标记')
-      assert.ok(/update-reminder-badge-cycle/.test(homeView), '缺少周期样式')
-      assert.ok(/跳过这一集/.test(homeView), '缺少跳过单集的操作')
+      assert.ok(/cycleLabel/.test(cardView), '缺少周期标记')
+      assert.ok(/update-reminder-badge-cycle/.test(cardView), '缺少周期样式')
+      assert.ok(/跳过这一集/.test(cardView), '缺少跳过单集的操作')
       assert.ok(/isCycleOccurrence/.test(homeView), '缺少周期场次判断')
     })
 

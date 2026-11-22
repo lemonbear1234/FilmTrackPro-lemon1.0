@@ -95,6 +95,7 @@
       @close="reminderModalOpen = false"
       @saved="handleReminderSaved"
       @deleted="reminderModalOpen = false"
+      @library-added="handleLibraryAdded"
     />
   </div>
 </template>
@@ -170,6 +171,20 @@ const openAddReminder = async () => {
 const handleReminderSaved = (message: string) => {
   reminderModalOpen.value = false;
   toast.success(message);
+};
+
+/** 弹窗里顺手建了「想看」记录，影视库要立刻能看到 */
+const handleLibraryAdded = async () => {
+  const response = await movieStore.fetchMovies({ force: true });
+  if (response?.success) {
+    allMovies.value = movieStore.movies;
+    await refreshFilteredItems();
+  }
+
+  const result = await databaseAPI.getMovies();
+  if (result.success && result.data) {
+    reminderMovieOptions.value = result.data;
+  }
 };
 
 // 动态筛选项：年份从库内数据生成，保证只出现有数据的选项

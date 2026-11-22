@@ -14,6 +14,7 @@ const homeData = read('src/views/Home/composables/useHomeData.ts')
 const libraryHeader = read('src/views/Library/components/LibraryHeader.vue')
 const libraryView = read('src/views/Library/index.vue')
 const modal = read('src/components/ReminderEditModal.vue')
+const cardView = read('src/components/ReminderCard.vue')
 
 describe('更新提醒：手动增删改查', () => {
   describe('数据结构', () => {
@@ -31,7 +32,7 @@ describe('更新提醒：手动增删改查', () => {
     })
 
     it('迁移版本已推进，老库能补建表', () => {
-      assert.ok(/LATEST_SCHEMA_VERSION = 5/.test(schema), '迁移版本应推进到 5')
+      assert.ok(/LATEST_SCHEMA_VERSION = 6/.test(schema), '迁移版本应推进到 6')
       assert.ok(
         /name: 'manual-reminder-entries'/.test(schema),
         '缺少 v4 迁移'
@@ -67,7 +68,7 @@ describe('更新提醒：手动增删改查', () => {
 
     it('修改与删除只作用于手动条目', () => {
       assert.ok(
-        /WHERE id = \$12 AND source = 'manual'/.test(dao),
+        /WHERE id = \$13 AND source = 'manual'/.test(dao),
         '更新不应改到忽略标记'
       )
       assert.ok(
@@ -147,9 +148,9 @@ describe('更新提醒：手动增删改查', () => {
     })
 
     it('手动条目有来源标记，已播出会灰显', () => {
-      assert.ok(/update-reminder-badge/.test(homeView), '缺少「手动」标记')
-      assert.ok(/update-reminder-card-past/.test(homeView), '缺少已播出样式')
-      assert.ok(/item\.is_past \? '已播出'/.test(homeView), '已播出应显式标注')
+      assert.ok(/update-reminder-badge/.test(cardView), '缺少「手动」标记')
+      assert.ok(/update-reminder-card-past/.test(cardView), '缺少已播出样式')
+      assert.ok(/已播出 · \$\{days\} 天前/.test(cardView), '已播出应显式标注新旧')
     })
 
     it('没有关联作品的手动提醒不会跳到空白详情页', () => {

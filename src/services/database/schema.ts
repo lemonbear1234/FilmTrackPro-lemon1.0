@@ -13,7 +13,7 @@ type Migration = {
   up: (db: Awaited<ReturnType<typeof DatabaseConnection.getRawInstance>>) => Promise<void>
 }
 
-const LATEST_SCHEMA_VERSION = 5
+const LATEST_SCHEMA_VERSION = 6
 
 const MOVIES_TABLE_SQL = `CREATE TABLE IF NOT EXISTS movies (
   id TEXT PRIMARY KEY,
@@ -102,6 +102,9 @@ const MOVIE_PLAYBACK_PROGRESS_TABLE_SQL = `CREATE TABLE IF NOT EXISTS movie_play
  *
  * repeat_days：手动提醒的更新周期（天）。为空表示只提醒这一集；
  * 有值时后续集数按周期自动推导，不用一集一集添加。
+ *
+ * media_type：'movie' / 'tv'，决定卡片上是「上映提醒」还是「播出提醒」，
+ * 以及编辑时是否显示季集与更新周期。为空时按剧集处理，兼容老数据。
  */
 const REMINDER_ENTRIES_TABLE_SQL = `CREATE TABLE IF NOT EXISTS reminder_entries (
   id TEXT PRIMARY KEY,
@@ -115,6 +118,7 @@ const REMINDER_ENTRIES_TABLE_SQL = `CREATE TABLE IF NOT EXISTS reminder_entries 
   episode_number INTEGER,
   episode_name TEXT,
   repeat_days INTEGER,
+  media_type TEXT,
   notes TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -190,7 +194,8 @@ const MOVIE_PLAYBACK_PROGRESS_COLUMN_MIGRATIONS = [
 
 /** 提醒表后续补的字段（老库缺列时逐条补上） */
 const REMINDER_ENTRIES_COLUMN_MIGRATIONS = [
-  'ALTER TABLE reminder_entries ADD COLUMN repeat_days INTEGER'
+  'ALTER TABLE reminder_entries ADD COLUMN repeat_days INTEGER',
+  'ALTER TABLE reminder_entries ADD COLUMN media_type TEXT'
 ] as const
 
 const INDEX_COMMANDS = [
@@ -315,6 +320,15 @@ export class DatabaseSchema {
     {
       version: 5,
       name: 'reminder-repeat-days',
+      up: async (db) => {
+        await this.executeIgnoreDuplicate(db, REMINDER_ENTRIES_TABLE_SQL)
+        await this.ensureReminderEntryColumns(db)
+        await this.ensureIndexes(db)
+      }
+    },
+    {
+      version: 6,
+      name: 'reminder-media-type',
       up: async (db) => {
         await this.executeIgnoreDuplicate(db, REMINDER_ENTRIES_TABLE_SQL)
         await this.ensureReminderEntryColumns(db)

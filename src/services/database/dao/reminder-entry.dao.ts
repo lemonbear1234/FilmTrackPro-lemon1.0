@@ -14,7 +14,8 @@ import { DatabaseUtils } from '../utils';
 type ReminderEntryRow = DatabaseRow & ReminderEntry;
 
 const SELECT_COLUMNS = `id, source, movie_id, title, tmdb_id, poster_path,
-  air_date, season_number, episode_number, episode_name, repeat_days, notes, created_at, updated_at`;
+  air_date, season_number, episode_number, episode_name, repeat_days, media_type,
+  notes, created_at, updated_at`;
 
 export class ReminderEntryDAO {
   /** 获取全部手动添加的提醒（按播出日期升序） */
@@ -58,8 +59,9 @@ export class ReminderEntryDAO {
       await db.execute(
         `INSERT INTO reminder_entries (
           id, source, movie_id, title, tmdb_id, poster_path,
-          air_date, season_number, episode_number, episode_name, repeat_days, notes, created_at, updated_at
-        ) VALUES ($1, 'manual', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+          air_date, season_number, episode_number, episode_name,
+          repeat_days, media_type, notes, created_at, updated_at
+        ) VALUES ($1, 'manual', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
         [
           id,
           form.movie_id || null,
@@ -71,6 +73,7 @@ export class ReminderEntryDAO {
           form.episode_number ?? null,
           form.episode_name || null,
           form.repeat_days ?? null,
+          form.media_type ?? null,
           form.notes || null,
           timestamp,
           timestamp
@@ -105,8 +108,9 @@ export class ReminderEntryDAO {
         `UPDATE reminder_entries SET
           movie_id = $1, title = $2, tmdb_id = $3, poster_path = $4,
           air_date = $5, season_number = $6, episode_number = $7,
-          episode_name = $8, repeat_days = $9, notes = $10, updated_at = $11
-        WHERE id = $12 AND source = 'manual'`,
+          episode_name = $8, repeat_days = $9, media_type = $10,
+          notes = $11, updated_at = $12
+        WHERE id = $13 AND source = 'manual'`,
         [
           form.movie_id || null,
           form.title,
@@ -117,6 +121,7 @@ export class ReminderEntryDAO {
           form.episode_number ?? null,
           form.episode_name || null,
           form.repeat_days ?? null,
+          form.media_type ?? null,
           form.notes || null,
           timestamp,
           id
@@ -146,6 +151,46 @@ export class ReminderEntryDAO {
       return { success: true, data: id };
     } catch (error) {
       return { success: false, error: `删除提醒失败: ${error}` };
+    }
+  }
+
+  /** 批量删除手动提醒（「清空已播出」用） */
+  static async deleteEntries(ids: string[]): Promise<ApiResponse<number>> {
+    const unique = Array.from(new Set(ids.filter(Boolean)));
+    if (unique.length === 0) {
+      return { success: true, data: 0 };
+    }
+
+    try {
+      const db = await DatabaseConnection.getInstance();
+      const placeholders = unique.map((_, index) => `$${index + 1}`).join(', ');
+      await db.execute(
+        `DELETE FROM reminder_entries WHERE source = 'manual' AND id IN (${placeholders})`,
+        unique
+      );
+      return { success: true, data: unique.length };
+    } catch (error) {
+      return { success: false, error: `清空提醒失败: ${error}` };
+    }
+  }
+
+  /**
+   * 清理早已播完的单集手动提醒
+   * 只动「没有周期」的条目：周期提醒的原点是后续场次的推导依据，删了会把还在追的剧一起弄丢
+   */
+  static async purgeExpiredEntries(beforeDate: string): Promise<ApiResponse<number>> {
+    try {
+      const db = await DatabaseConnection.getInstance();
+      await db.execute(
+        `DELETE FROM reminder_entries
+         WHERE source = 'manual'
+           AND (repeat_days IS NULL OR repeat_days < 1)
+           AND air_date < $1`,
+        [beforeDate]
+      );
+      return { success: true, data: 0 };
+    } catch (error) {
+      return { success: false, error: `清理过期提醒失败: ${error}` };
     }
   }
 
