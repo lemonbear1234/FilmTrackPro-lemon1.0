@@ -318,19 +318,25 @@ const localMatches = computed(() => {
 const getTmdbTitle = (item: TMDbMovie) => item.title || item.name || '';
 const getTmdbYear = (item: TMDbMovie) => (item.release_date || item.first_air_date || '').slice(0, 4);
 
-/** TMDb 结果：只留电影/剧集，按当前类型筛，去掉重复 */
+/**
+ * TMDb 结果：不按当前类型过滤——用户可能默认停在「剧集」却搜的是电影，
+ * 过滤掉就永远搜不到。只把当前类型的结果排在前面，选中后类型会自动跟着变。
+ */
 const tmdbMatches = computed(() => {
   const seen = new Set<number>();
-  return tmdbResults.value
+  const all = tmdbResults.value
     .filter(item => item.media_type === 'movie' || item.media_type === 'tv')
-    .filter(item => item.media_type === mediaType.value)
     .filter(item => Boolean(getTmdbTitle(item)))
     .filter(item => {
       if (seen.has(item.id)) return false;
       seen.add(item.id);
       return true;
-    })
-    .slice(0, 6);
+    });
+
+  return [
+    ...all.filter(item => item.media_type === mediaType.value),
+    ...all.filter(item => item.media_type !== mediaType.value)
+  ].slice(0, 6);
 });
 
 const canAddToLibrary = computed(() => !movieId.value && Boolean(tmdbId.value));
