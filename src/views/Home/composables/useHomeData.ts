@@ -49,6 +49,7 @@ export function useHomeData() {
   });
 
   const watchingMovies = ref<Movie[]>([]);
+  const pausedMovies = ref<Movie[]>([]);
   const recentHistory = ref<Movie[]>([]);
   const reminderGroups = ref<TVReminderGroup[]>([]);
 
@@ -71,8 +72,26 @@ export function useHomeData() {
   };
 
   const reminderRange = ref<number>(readStoredRange());
-  // 待办只依赖「在追」列表，用 computed 派生，避免多处赋值彼此覆盖（加载顺序不同结果就不同）
-  const actionItems = computed<MovieActionItem[]>(() => buildMovieActionItems(watchingMovies.value));
+
+  // 手动添加提醒时的候选作品（本地影视库全量，按需加载）
+  const reminderMovieOptions = ref<Movie[]>([]);
+  const loadReminderMovieOptions = async (force = false): Promise<Movie[]> => {
+    if (!force && reminderMovieOptions.value.length > 0) {
+      return reminderMovieOptions.value;
+    }
+
+    const result = await databaseAPI.getMovies();
+    if (result.success && result.data) {
+      reminderMovieOptions.value = result.data;
+    }
+
+    return reminderMovieOptions.value;
+  };
+
+  // 待办覆盖「在追」和「暂停」两类，用 computed 派生，避免多处赋值彼此覆盖（加载顺序不同结果就不同）
+  const actionItems = computed<MovieActionItem[]>(() =>
+    buildMovieActionItems([...watchingMovies.value, ...pausedMovies.value])
+  );
 
   const getMovieImageURL = (path: string | undefined) => {
     return tmdbAPI.getImageURL(path);
@@ -149,6 +168,18 @@ export function useHomeData() {
     }
   };
 
+  const loadPausedMovies = async () => {
+    try {
+      const result = await databaseAPI.getMovies('paused');
+      if (result.success && result.data) {
+        pausedMovies.value = result.data;
+      }
+    } catch (error) {
+      // 暂停数据只影响待办里的「恢复进度」，失败不该阻断首页其它内容
+      console.warn('获取暂停作品失败:', error);
+    }
+  };
+
   const loadWatchingMovies = async (options: LoadWatchingOptions = {}): Promise<Movie[]> => {
     const { silent = false } = options;
     try {
@@ -160,6 +191,8 @@ export function useHomeData() {
       const result = await databaseAPI.getMovies('watching');
       if (result.success && result.data) {
         watchingMovies.value = result.data;
+        // 待办还要包含暂停中的作品，否则「恢复进度」永远没有卡片
+        void loadPausedMovies();
         return result.data;
       }
 
@@ -317,6 +350,8 @@ export function useHomeData() {
     getTotalWatchedEpisodes,
     reminderRange,
     reminderRangeOptions: REMINDER_RANGE_OPTIONS,
+    reminderMovieOptions,
+    loadReminderMovieOptions,
     setReminderRange,
     getRelativeDayLabel,
     formatReminderDate,

@@ -125,4 +125,5 @@ export interface LibraryHeaderEmits {
   (e: 'enableSelection'): void;
   (e: 'cancelSelection'): void;
   (e: 'confirmDelete'): void;
+  (e: 'addReminder'): void;
 }

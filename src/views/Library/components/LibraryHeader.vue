@@ -9,6 +9,16 @@
         <div class="flex items-center space-x-3">
           <button
             v-if="!isSelectionMode"
+            @click="$emit('addReminder')"
+            class="flex items-center px-3 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 transition-colors"
+            title="给 TMDb 上没有的剧集手动添加播出提醒"
+          >
+            <BellPlus :size="16" class="mr-2" />
+            添加提醒
+          </button>
+
+          <button
+            v-if="!isSelectionMode"
             @click="$emit('enableSelection')"
             class="flex items-center px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
           >
@@ -127,6 +137,7 @@ import {
   List as ListIcon,
   CheckSquare,
   Trash2,
+  BellPlus,
   X
 } from 'lucide-vue-next';
 import HeadlessSelect from '../../../components/ui/HeadlessSelect.vue';

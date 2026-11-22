@@ -67,8 +67,9 @@ describe('观影待办：不再重复「新集提醒」', () => {
   it('首页待办由「在追」列表派生，加载顺序不影响结果', () => {
     const source = read('src/views/Home/composables/useHomeData.ts')
     assert.ok(
-      /const actionItems = computed<MovieActionItem\[\]>\(\(\) => buildMovieActionItems\(watchingMovies\.value\)\)/.test(source),
-      '待办应为 computed 派生，避免多处赋值互相覆盖'
+      /const actionItems = computed<MovieActionItem\[\]>\(/.test(source) &&
+        /buildMovieActionItems\(\[\.\.\.watchingMovies\.value, \.\.\.pausedMovies\.value\]\)/.test(source),
+      '待办应为 computed 派生（在追 + 暂停），避免多处赋值互相覆盖'
     )
     assert.ok(
       !/actionItems\.value\s*=/.test(source),

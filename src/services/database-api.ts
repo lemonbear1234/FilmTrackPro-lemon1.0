@@ -14,11 +14,14 @@ import type {
   ReplayRecordForm,
   UpdateMovieForm,
   MoviePlaybackProgress,
-  PlaybackProgressPayload
+  PlaybackProgressPayload,
+  ReminderEntry,
+  ReminderEntryForm
 } from '../types';
 import { DatabaseService, ReplayRecordDAO, MoviePlaybackProgressDAO } from './database';
 import { StatisticsDAO } from './database/dao/statistics.dao';
 import { MovieDAO } from './database/dao/movie.dao';
+import { ReminderEntryDAO } from './database/dao/reminder-entry.dao';
 import { withApiResponse } from '../utils/api-utils';
 
 /**
@@ -285,6 +288,48 @@ export class DatabaseApiService {
       }
     });
   }
+
+  // ==================== 更新提醒条目 ====================
+
+  /** 获取用户手动添加的提醒 */
+  static async getManualReminders(): Promise<ApiResponse<ReminderEntry[]>> {
+    return ReminderEntryDAO.getManualEntries();
+  }
+
+  /** 获取已忽略的自动提醒标记 */
+  static async getDismissedReminders(): Promise<ApiResponse<ReminderEntry[]>> {
+    return ReminderEntryDAO.getDismissedEntries();
+  }
+
+  /** 新增手动提醒 */
+  static async addManualReminder(form: ReminderEntryForm): Promise<ApiResponse<ReminderEntry>> {
+    return ReminderEntryDAO.addEntry(form);
+  }
+
+  /** 修改手动提醒 */
+  static async updateManualReminder(
+    id: string,
+    form: ReminderEntryForm
+  ): Promise<ApiResponse<ReminderEntry>> {
+    return ReminderEntryDAO.updateEntry(id, form);
+  }
+
+  /** 删除手动提醒 */
+  static async deleteManualReminder(id: string): Promise<ApiResponse<string>> {
+    return ReminderEntryDAO.deleteEntry(id);
+  }
+
+  /** 忽略一条自动提醒 */
+  static async dismissAutoReminder(payload: {
+    movieId: string;
+    title: string;
+    airDate: string;
+    seasonNumber?: number | null;
+    episodeNumber?: number | null;
+    tmdbId?: number | null;
+  }): Promise<ApiResponse<string>> {
+    return ReminderEntryDAO.dismissAutoReminder(payload);
+  }
 }
 
 // 导出默认的数据库API实例
@@ -313,6 +358,13 @@ export const databaseAPI = {
   getStatistics: DatabaseApiService.getStatistics,
   getDetailedStatistics: DatabaseApiService.getDetailedStatistics,
   getAllWatchDates: DatabaseApiService.getAllWatchDates,
+  // 更新提醒条目
+  getManualReminders: DatabaseApiService.getManualReminders,
+  getDismissedReminders: DatabaseApiService.getDismissedReminders,
+  addManualReminder: DatabaseApiService.addManualReminder,
+  updateManualReminder: DatabaseApiService.updateManualReminder,
+  deleteManualReminder: DatabaseApiService.deleteManualReminder,
+  dismissAutoReminder: DatabaseApiService.dismissAutoReminder,
   beginTransaction: DatabaseApiService.beginTransaction,
   commitTransaction: DatabaseApiService.commitTransaction,
   rollbackTransaction: DatabaseApiService.rollbackTransaction

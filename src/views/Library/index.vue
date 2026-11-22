@@ -19,6 +19,7 @@
       @enable-selection="enableSelectionMode"
       @cancel-selection="cancelSelectionMode"
       @confirm-delete="confirmDelete"
+      @add-reminder="openAddReminder"
       @update:search-query="updateSearchQuery"
       @update:selected-type="updateSelectedType"
       @update:selected-status="updateSelectedStatus"
@@ -85,6 +86,16 @@
       @cancel="cancelDelete"
       @confirm="executeDelete"
     />
+
+    <!-- 添加更新提醒 -->
+    <ReminderEditModal
+      :is-open="reminderModalOpen"
+      :prefill="reminderPrefill"
+      :movies="reminderMovieOptions"
+      @close="reminderModalOpen = false"
+      @saved="handleReminderSaved"
+      @deleted="reminderModalOpen = false"
+    />
   </div>
 </template>
 
@@ -115,6 +126,9 @@ import GridView from './components/GridView.vue';
 import ListView from './components/ListView.vue';
 import LibraryStates from './components/LibraryStates.vue';
 import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue';
+import ReminderEditModal from '../../components/ReminderEditModal.vue';
+import { toast } from '../../utils/toast';
+import type { Movie, ReminderEditPrefill } from '../../types';
 
 const router = useRouter();
 const route = useRoute();
@@ -133,6 +147,30 @@ const filteredItemsSource = shallowRef<MovieRecord[]>([]);
 // 每部作品的全部真实观看日期：movieId -> YYYY-MM-DD[]
 const watchDatesByMovie = ref<Record<string, string[]>>({});
 let filterTaskId = 0;
+
+// ==================== 添加更新提醒 ====================
+const reminderModalOpen = ref(false);
+const reminderPrefill = ref<ReminderEditPrefill | null>(null);
+const reminderMovieOptions = ref<Movie[]>([]);
+
+const openAddReminder = async () => {
+  reminderPrefill.value = null;
+
+  // 选择器要能搜到整个影视库，而不只是当前筛选结果
+  if (reminderMovieOptions.value.length === 0) {
+    const result = await databaseAPI.getMovies();
+    if (result.success && result.data) {
+      reminderMovieOptions.value = result.data;
+    }
+  }
+
+  reminderModalOpen.value = true;
+};
+
+const handleReminderSaved = (message: string) => {
+  reminderModalOpen.value = false;
+  toast.success(message);
+};
 
 // 动态筛选项：年份从库内数据生成，保证只出现有数据的选项
 const releaseYearOptions = computed(() => {

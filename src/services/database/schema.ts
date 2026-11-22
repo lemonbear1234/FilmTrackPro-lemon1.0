@@ -13,7 +13,7 @@ type Migration = {
   up: (db: Awaited<ReturnType<typeof DatabaseConnection.getRawInstance>>) => Promise<void>
 }
 
-const LATEST_SCHEMA_VERSION = 3
+const LATEST_SCHEMA_VERSION = 4
 
 const MOVIES_TABLE_SQL = `CREATE TABLE IF NOT EXISTS movies (
   id TEXT PRIMARY KEY,
@@ -95,6 +95,27 @@ const MOVIE_PLAYBACK_PROGRESS_TABLE_SQL = `CREATE TABLE IF NOT EXISTS movie_play
   FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE
 )`
 
+/**
+ * 更新提醒条目表
+ * source = 'manual'    用户手动添加的提醒（TMDb 拉不到、或日期不准时自己填）
+ * source = 'dismissed' 对某条自动提醒的「忽略」标记，按 作品+日期+集数 去重
+ */
+const REMINDER_ENTRIES_TABLE_SQL = `CREATE TABLE IF NOT EXISTS reminder_entries (
+  id TEXT PRIMARY KEY,
+  source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'dismissed')),
+  movie_id TEXT,
+  title TEXT NOT NULL,
+  tmdb_id INTEGER,
+  poster_path TEXT,
+  air_date TEXT NOT NULL,
+  season_number INTEGER,
+  episode_number INTEGER,
+  episode_name TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)`
+
 const MOVIES_COLUMN_MIGRATIONS = [
   'ALTER TABLE movies ADD COLUMN original_title TEXT',
   'ALTER TABLE movies ADD COLUMN backdrop_path TEXT',
@@ -174,7 +195,14 @@ const INDEX_COMMANDS = [
   'CREATE INDEX IF NOT EXISTS idx_replay_records_movie_date ON replay_records(movie_id, watch_date)',
   'CREATE INDEX IF NOT EXISTS idx_movie_playback_progress_movie_id ON movie_playback_progress(movie_id)',
   'CREATE UNIQUE INDEX IF NOT EXISTS idx_movie_playback_progress_episode_unique ON movie_playback_progress(movie_id, source_key, episode_url)',
-  'CREATE INDEX IF NOT EXISTS idx_movie_playback_progress_last_played_at ON movie_playback_progress(last_played_at)'
+  'CREATE INDEX IF NOT EXISTS idx_movie_playback_progress_last_played_at ON movie_playback_progress(last_played_at)',
+  'CREATE INDEX IF NOT EXISTS idx_reminder_entries_source ON reminder_entries(source)',
+  'CREATE INDEX IF NOT EXISTS idx_reminder_entries_air_date ON reminder_entries(air_date)',
+  'CREATE INDEX IF NOT EXISTS idx_reminder_entries_movie_id ON reminder_entries(movie_id)',
+  // 同一条自动提醒只忽略一次（episode_number 为空的用 -1 占位，避免 NULL 使唯一索引失效）
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_reminder_entries_dismissed_unique
+     ON reminder_entries(movie_id, air_date, COALESCE(episode_number, -1))
+     WHERE source = 'dismissed'`
 ] as const
 
 const DATABASE_BASE_DIR = BaseDirectory.AppConfig
@@ -264,6 +292,14 @@ export class DatabaseSchema {
             OR last_played_at IS NULL
         `, [new Date().toISOString(), new Date().toISOString(), new Date().toISOString()])
 
+        await this.ensureIndexes(db)
+      }
+    },
+    {
+      version: 4,
+      name: 'manual-reminder-entries',
+      up: async (db) => {
+        await this.executeIgnoreDuplicate(db, REMINDER_ENTRIES_TABLE_SQL)
         await this.ensureIndexes(db)
       }
     }
@@ -361,6 +397,7 @@ export class DatabaseSchema {
     await db.execute(MOVIES_TABLE_SQL)
     await db.execute(REPLAY_RECORDS_TABLE_SQL)
     await db.execute(MOVIE_PLAYBACK_PROGRESS_TABLE_SQL)
+    await this.executeIgnoreDuplicate(db, REMINDER_ENTRIES_TABLE_SQL)
   }
 
   private static async ensureBaseColumns(

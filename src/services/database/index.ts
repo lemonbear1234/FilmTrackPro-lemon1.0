@@ -18,6 +18,7 @@ export { MovieDAO } from './dao/movie.dao'
 export { StatisticsDAO } from './dao/statistics.dao'
 export { ReplayRecordDAO } from './dao/replay-record.dao';
 export { MoviePlaybackProgressDAO } from './dao/movie-playback-progress.dao';
+export { ReminderEntryDAO } from './dao/reminder-entry.dao';
 
 // 为了向后兼容，保留原始的DatabaseService别名
 import { DatabaseConnection } from './connection'

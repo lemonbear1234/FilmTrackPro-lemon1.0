@@ -284,6 +284,59 @@ export interface TVEpisodeReminder {
   episode_name?: string | null;
   overview?: string | null;
   still_path?: string | null;
+  /** auto = TMDb 自动拉取，manual = 用户手动添加 */
+  source?: 'auto' | 'manual';
+  /** 手动提醒的条目 ID，自动提醒为空 */
+  entry_id?: string;
+  /** 手动提醒的备注 */
+  notes?: string | null;
+  /** 播出日期已过 */
+  is_past?: boolean;
+}
+
+/** 手动提醒条目（含「忽略自动提醒」标记） */
+export interface ReminderEntry {
+  id: string;
+  source: 'manual' | 'dismissed';
+  movie_id?: string | null;
+  title: string;
+  tmdb_id?: number | null;
+  poster_path?: string | null;
+  air_date: string;
+  season_number?: number | null;
+  episode_number?: number | null;
+  episode_name?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** 手动提醒的新增/编辑表单 */
+export interface ReminderEntryForm {
+  movie_id?: string | null;
+  title: string;
+  tmdb_id?: number | null;
+  poster_path?: string | null;
+  air_date: string;
+  season_number?: number | null;
+  episode_number?: number | null;
+  episode_name?: string | null;
+  notes?: string | null;
+}
+
+/** 打开提醒编辑弹窗时的预填数据 */
+export interface ReminderEditPrefill {
+  /** 手动提醒的条目 ID，有值表示编辑已有条目 */
+  entryId?: string;
+  movieId?: string | null;
+  title?: string;
+  tmdbId?: number | null;
+  posterPath?: string | null;
+  airDate?: string;
+  season?: number | null;
+  episode?: number | null;
+  episodeName?: string | null;
+  notes?: string | null;
 }
 
 /** 更新提醒按日期分组 */

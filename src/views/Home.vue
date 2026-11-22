@@ -208,7 +208,7 @@
 
         <div v-else class="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]">
           <button
-            v-for="item in actionItems"
+            v-for="item in visibleActionItems"
             :key="`${item.type}-${item.movieId}`"
             type="button"
             class="todo-card text-left"
@@ -223,6 +223,16 @@
             <div class="todo-card-reason">{{ item.reason }}</div>
           </button>
         </div>
+
+        <div v-if="actionItems.length > TODO_PREVIEW_LIMIT" class="mt-4 flex justify-center">
+          <button
+            type="button"
+            class="text-sm font-medium text-blue-600 hover:text-blue-700"
+            @click="showAllTodos = !showAllTodos"
+          >
+            {{ showAllTodos ? '收起' : `展开全部 ${actionItems.length} 项` }}
+          </button>
+        </div>
       </div>
 
       <!-- 更新提醒 -->
@@ -234,10 +244,17 @@
             </div>
             <div>
               <h2 class="text-xl font-semibold text-gray-900">更新提醒</h2>
-              <p class="text-gray-500 text-sm">未来 {{ reminderRange }} 天内预计播出的剧集</p>
+              <p class="text-gray-500 text-sm">TMDb 未来 {{ reminderRange }} 天内的播出，加上你手动添加的提醒</p>
             </div>
           </div>
           <div class="flex items-center gap-2">
+          <button
+            class="inline-flex items-center px-3 py-2 text-sm font-medium text-blue-600 border border-blue-100 rounded-lg hover:bg-blue-50 transition-colors duration-200"
+            @click="openAddReminder"
+          >
+            <PlusIcon class="w-4 h-4 mr-1.5" />
+            添加提醒
+          </button>
           <div class="reminder-range" role="group" aria-label="提醒查看范围">
             <button
               v-for="option in reminderRangeOptions"
@@ -294,8 +311,11 @@
           tone="info"
           :icon="BellRingIcon"
           title="近期没有即将更新的剧集"
-          description="记录更多正在播出的电视剧，影迹会自动整理出未来几天的播出表。"
+          description="加几部在追的剧集，影迹会自动整理播出表；TMDb 上没有的，也可以手动添加。"
+          action-label="手动添加提醒"
+          :action-icon="PlusIcon"
           hint="今天有新集时会通过桌面通知提醒你（需要授予通知权限）"
+          @action="openAddReminder"
         />
 
         <div v-else class="space-y-6">
@@ -313,8 +333,28 @@
                 v-for="item in group.items"
                 :key="`${item.movie_id}-${item.air_date}-${item.episode_number ?? 'na'}`"
                 class="update-reminder-card"
-                @click="navigateToDetail(item.movie_id)"
+                :class="{ 'update-reminder-card-past': item.is_past }"
+                @click="handleReminderClick(item)"
               >
+                <div class="update-reminder-actions">
+                  <button
+                    v-if="item.source === 'manual'"
+                    type="button"
+                    class="update-reminder-action"
+                    title="编辑这条提醒"
+                    @click.stop="openEditReminder(item)"
+                  >
+                    <PencilIcon class="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    class="update-reminder-action update-reminder-action-danger"
+                    :title="item.source === 'manual' ? '删除这条提醒' : '忽略这条提醒'"
+                    @click.stop="askRemoveReminder(item)"
+                  >
+                    <XIcon class="w-3.5 h-3.5" />
+                  </button>
+                </div>
                 <div class="update-reminder-poster">
                   <CachedImage
                     :src="getMovieImageURL(item.poster_path)"
@@ -323,12 +363,18 @@
                   />
                 </div>
                 <div class="update-reminder-info">
-                  <p class="update-reminder-title">{{ item.title }}</p>
+                  <p class="update-reminder-title">
+                    <span class="update-reminder-title-text">{{ item.title }}</span>
+                    <span v-if="item.source === 'manual'" class="update-reminder-badge">手动</span>
+                  </p>
                   <div class="update-reminder-meta">
-                    <span class="update-reminder-episode">{{ formatEpisodeLabel(item.season_number, item.episode_number) }}</span>
-                    <span class="update-reminder-day">{{ getRelativeDayLabel(item.air_date) || '即将播出' }}</span>
+                    <span class="update-reminder-episode">{{ getReminderEpisodeLabel(item) }}</span>
+                    <span class="update-reminder-day" :class="{ 'update-reminder-day-past': item.is_past }">
+                      {{ item.is_past ? '已播出' : (getRelativeDayLabel(item.air_date) || '即将播出') }}
+                    </span>
                   </div>
                   <p v-if="item.episode_name" class="update-reminder-name">{{ item.episode_name }}</p>
+                  <p v-else-if="item.notes" class="update-reminder-name">{{ item.notes }}</p>
                 </div>
               </div>
             </div>
@@ -473,11 +519,34 @@
       </div>
     </div>
     </div>
+
+    <ReminderEditModal
+      :is-open="reminderModalOpen"
+      :prefill="reminderPrefill"
+      :movies="reminderMovieOptions"
+      @close="reminderModalOpen = false"
+      @saved="handleReminderSaved"
+      @deleted="handleReminderDeleted"
+    />
+
+    <Modal
+      :is-open="Boolean(reminderPendingRemoval)"
+      type="confirm"
+      :title="reminderPendingRemoval?.source === 'manual' ? '删除这条提醒？' : '忽略这条提醒？'"
+      :message="reminderPendingRemoval?.source === 'manual'
+        ? '手动添加的提醒删掉就没了，之后不会再出现。'
+        : '忽略后这条自动提醒不会再出现，TMDb 数据变化也不会覆盖这个选择。'"
+      :confirm-text="reminderPendingRemoval?.source === 'manual' ? '删除' : '忽略'"
+      show-cancel
+      @close="reminderPendingRemoval = null"
+      @cancel="reminderPendingRemoval = null"
+      @confirm="confirmRemoveReminder"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { formatRating, getStatusLabel, getStatusBadgeClass } from '../utils/constants'
 import { useCountUp } from '../composables/useCountUp'
@@ -492,11 +561,17 @@ import {
   Clock as ClockIcon,
   BellRing as BellRingIcon,
   RefreshCcw as RefreshCcwIcon,
+  Pencil as PencilIcon,
+  X as XIcon,
 } from 'lucide-vue-next'
 import CachedImage from '../components/ui/CachedImage.vue'
 import Skeleton from '../components/common/Skeleton.vue'
 import EmptyState from '../components/common/EmptyState.vue'
+import Modal from '../components/ui/Modal.vue'
+import ReminderEditModal from '../components/ReminderEditModal.vue'
 import { toast } from '../utils/toast'
+import { tvReminderService } from '../services/reminder'
+import type { TVEpisodeReminder, ReminderEditPrefill } from '../types'
 import { useHomeData } from './Home/composables/useHomeData'
 
 const router = useRouter()
@@ -535,12 +610,97 @@ const {
   loadStatistics,
   loadWatchingMovies,
   loadReplayHistory,
+  loadUpdateReminders,
   refreshReminders,
   initializeData,
   reminderRange,
   reminderRangeOptions,
+  reminderMovieOptions,
+  loadReminderMovieOptions,
   setReminderRange
 } = useHomeData()
+
+// ==================== 更新提醒：手动增删改 ====================
+const reminderModalOpen = ref(false)
+const reminderPrefill = ref<ReminderEditPrefill | null>(null)
+const reminderPendingRemoval = ref<TVEpisodeReminder | null>(null)
+
+const openAddReminder = async () => {
+  reminderPrefill.value = null
+  await loadReminderMovieOptions()
+  reminderModalOpen.value = true
+}
+
+const openEditReminder = async (item: TVEpisodeReminder) => {
+  reminderPrefill.value = {
+    entryId: item.entry_id,
+    movieId: item.movie_id?.startsWith('manual-') ? null : item.movie_id,
+    title: item.title,
+    tmdbId: item.tmdb_id ?? null,
+    posterPath: item.poster_path ?? null,
+    airDate: item.air_date,
+    season: item.season_number ?? null,
+    episode: item.episode_number ?? null,
+    episodeName: item.episode_name ?? null,
+    notes: item.notes ?? null
+  }
+  await loadReminderMovieOptions()
+  reminderModalOpen.value = true
+}
+
+// 手动条目变了，不用重新联网，复用已缓存的 TMDb 详情即可
+const reloadReminderList = () => loadUpdateReminders(watchingMovies.value)
+
+const handleReminderSaved = async (message: string) => {
+  reminderModalOpen.value = false
+  toast.success(message)
+  await reloadReminderList()
+}
+
+const handleReminderDeleted = async () => {
+  reminderModalOpen.value = false
+  toast.success('提醒已删除')
+  await reloadReminderList()
+}
+
+const askRemoveReminder = (item: TVEpisodeReminder) => {
+  reminderPendingRemoval.value = item
+}
+
+const confirmRemoveReminder = async () => {
+  const target = reminderPendingRemoval.value
+  if (!target) return
+
+  const result = await tvReminderService.dismissReminder(target)
+  reminderPendingRemoval.value = null
+
+  if (!result.success) {
+    toast.error(result.error || '操作失败，请重试')
+    return
+  }
+
+  toast.success(target.source === 'manual' ? '提醒已删除' : '已忽略这条提醒')
+  await reloadReminderList()
+}
+
+const handleReminderClick = (item: TVEpisodeReminder) => {
+  // 没关联本地作品的手动提醒没有详情页，点开就是编辑
+  if (item.movie_id?.startsWith('manual-')) {
+    if (item.source === 'manual') void openEditReminder(item)
+    return
+  }
+
+  navigateToDetail(item.movie_id)
+}
+
+// 手动提醒可能只填了日期，没有季集信息
+const getReminderEpisodeLabel = (item: TVEpisodeReminder) => {
+  if (item.season_number || item.episode_number) {
+    return formatEpisodeLabel(item.season_number, item.episode_number)
+  }
+
+  return item.source === 'manual' ? '播出提醒' : '新集即将上线'
+}
 
 // 刷新提醒：确实联网后才给反馈，避免「点了没反应」的错觉
 const handleRefreshReminders = async () => {
@@ -635,11 +795,19 @@ const getActionTypeLabel = (type: string) => {
   const labels: Record<string, string> = {
     continue: '继续追剧',
     resume: '恢复进度',
+    'caught-up': '已追到最新',
     review: '待复核'
   }
 
   return labels[type] || '待处理'
 }
+
+// 待办卡片默认只露前 6 项，多的点「展开全部」
+const TODO_PREVIEW_LIMIT = 6
+const showAllTodos = ref(false)
+const visibleActionItems = computed(() =>
+  showAllTodos.value ? actionItems.value : actionItems.value.slice(0, TODO_PREVIEW_LIMIT)
+)
 
 onMounted(() => {
   // 延迟执行，确保组件完全挂载
@@ -715,6 +883,7 @@ onMounted(() => {
 }
 
 .update-reminder-card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.9rem;
@@ -730,6 +899,49 @@ onMounted(() => {
   border-color: rgba(191, 219, 254, 1);
   box-shadow: 0 12px 26px -20px rgba(15, 23, 42, 0.45);
   transform: translateY(-2px);
+}
+
+.update-reminder-card-past {
+  opacity: 0.62;
+}
+
+.update-reminder-actions {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  display: flex;
+  gap: 0.25rem;
+  opacity: 0;
+  transition: opacity 160ms ease;
+  z-index: 2;
+}
+
+.update-reminder-card:hover .update-reminder-actions,
+.update-reminder-card:focus-within .update-reminder-actions {
+  opacity: 1;
+}
+
+.update-reminder-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.95);
+  color: #64748b;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+
+.update-reminder-action:hover {
+  color: #1d4ed8;
+  border-color: rgba(191, 219, 254, 1);
+}
+
+.update-reminder-action-danger:hover {
+  color: #dc2626;
+  border-color: rgba(254, 202, 202, 1);
 }
 
 .update-reminder-poster {
@@ -759,12 +971,29 @@ onMounted(() => {
 }
 
 .update-reminder-title {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
   font-size: 0.92rem;
   font-weight: 600;
   color: #111827;
-  white-space: nowrap;
+  min-width: 0;
+}
+
+.update-reminder-title-text {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.update-reminder-badge {
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: rgba(219, 234, 254, 0.95);
+  padding: 0.05rem 0.4rem;
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: #1d4ed8;
 }
 
 .update-reminder-meta {
@@ -798,6 +1027,11 @@ onMounted(() => {
   border-radius: 999px;
   padding: 0.05rem 0.45rem;
   white-space: nowrap;
+}
+
+.update-reminder-day-past {
+  color: #64748b;
+  background: rgba(226, 232, 240, 0.8);
 }
 
 .stats-card {
@@ -990,6 +1224,11 @@ onMounted(() => {
 .todo-card-tag-resume {
   background: rgba(254, 240, 138, 0.95);
   color: #a16207;
+}
+
+.todo-card-tag-caught-up {
+  background: rgba(226, 232, 240, 0.95);
+  color: #475569;
 }
 
 

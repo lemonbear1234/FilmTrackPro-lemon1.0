@@ -15,7 +15,7 @@ export interface MovieActionItem {
   reason: string;
   actionLabel: string;
   priority: number;
-  type: 'continue' | 'resume' | 'review';
+  type: 'continue' | 'resume' | 'caught-up' | 'review';
 }
 
 export interface WatchTimelineItem {
@@ -32,23 +32,53 @@ export interface WatchTimelineItem {
  * 这里只负责「接下来看什么」：在追的剧集下一步、暂停中的恢复。
  * 新集播出日程统一由首页下方的「更新提醒」呈现（那里按日期分组、带海报，
  * 还能刷新），如果这里再生成一批「新集提醒」卡片，两处内容会完全重复。
+ *
+ * 传进来的列表应当同时包含在追（watching）和暂停（paused），
+ * 否则「恢复进度」永远不会有卡片。
  */
 export function buildMovieActionItems(movies: Movie[]): MovieActionItem[] {
   const actions: MovieActionItem[] = [];
 
   for (const movie of movies) {
-    if (movie.status === 'watching' && movie.type === 'tv') {
-      const nextProgress = getNextWatchProgress(movie);
-      const progress = getWatchProgressSummary(movie);
+    if (movie.status === 'watching') {
+      if (movie.type === 'tv') {
+        const nextProgress = getNextWatchProgress(movie);
+        const progress = getWatchProgressSummary(movie);
 
-      if (nextProgress) {
+        if (nextProgress) {
+          actions.push({
+            movieId: movie.id,
+            title: movie.title,
+            subtitle: `下一步：第${nextProgress.season}季第${nextProgress.episode}集`,
+            reason: progress.current > 0 ? '上次看到这里' : '从这里开始看',
+            actionLabel: '继续观看',
+            priority: 100 - progress.percentage,
+            type: 'continue',
+          });
+        } else {
+          // 已经追到 TMDb 已知的最后一集：给一张低优先级卡片，
+          // 否则这部剧会从待办里静默消失，看起来像记录丢了
+          actions.push({
+            movieId: movie.id,
+            title: movie.title,
+            subtitle: progress.total > 0
+              ? `已看完 ${progress.current}/${progress.total} 集`
+              : '已追到当前最新一集',
+            reason: '等下一集更新，播出日程见下方「更新提醒」',
+            actionLabel: '查看详情',
+            priority: 40,
+            type: 'caught-up',
+          });
+        }
+      } else {
+        // 在看的电影：电视形态的「下一步」不适用，但也不该在待办里缺席
         actions.push({
           movieId: movie.id,
           title: movie.title,
-          subtitle: `下一步：第${nextProgress.season}季第${nextProgress.episode}集`,
-          reason: progress.current > 0 ? '上次看到这里' : '从这里开始看',
+          subtitle: '电影 · 还没标记看完',
+          reason: '看完记得改成「已看完」',
           actionLabel: '继续观看',
-          priority: 100 - progress.percentage,
+          priority: 85,
           type: 'continue',
         });
       }
@@ -78,8 +108,7 @@ export function buildMovieActionItems(movies: Movie[]): MovieActionItem[] {
       if (seen.has(item.movieId)) return false;
       seen.add(item.movieId);
       return true;
-    })
-    .slice(0, 6);
+    });
 }
 
 export function buildWatchTimeline(movie: Movie, replayRecords: ReplayRecord[]): WatchTimelineItem[] {

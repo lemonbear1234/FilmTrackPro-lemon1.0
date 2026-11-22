@@ -113,7 +113,7 @@ describe('更新提醒：范围可调', () => {
   it('页面上有范围切换入口', () => {
     assert.ok(/reminder-range/.test(homeView), '缺少范围分段控件')
     assert.ok(
-      /未来 \{\{ reminderRange \}\} 天内预计播出的剧集/.test(homeView),
+      /未来 \{\{ reminderRange \}\} 天内/.test(homeView),
       '副标题应显示当前范围'
     )
   })
