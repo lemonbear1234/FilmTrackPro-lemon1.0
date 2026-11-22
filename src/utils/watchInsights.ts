@@ -15,7 +15,7 @@ export interface MovieActionItem {
   reason: string;
   actionLabel: string;
   priority: number;
-  type: 'continue' | 'resume' | 'upcoming' | 'review';
+  type: 'continue' | 'resume' | 'review';
 }
 
 export interface WatchTimelineItem {
@@ -26,16 +26,14 @@ export interface WatchTimelineItem {
   tone: 'default' | 'accent' | 'success';
 }
 
-export function buildMovieActionItems(
-  movies: Movie[],
-  reminders: Array<{
-    movie_id: string;
-    air_date: string;
-    season_number?: number;
-    episode_number?: number;
-    title: string;
-  }> = []
-): MovieActionItem[] {
+/**
+ * 构建「观影待办」卡片。
+ *
+ * 这里只负责「接下来看什么」：在追的剧集下一步、暂停中的恢复。
+ * 新集播出日程统一由首页下方的「更新提醒」呈现（那里按日期分组、带海报，
+ * 还能刷新），如果这里再生成一批「新集提醒」卡片，两处内容会完全重复。
+ */
+export function buildMovieActionItems(movies: Movie[]): MovieActionItem[] {
   const actions: MovieActionItem[] = [];
 
   for (const movie of movies) {
@@ -71,24 +69,16 @@ export function buildMovieActionItems(
     }
   }
 
-  for (const reminder of reminders) {
-    actions.push({
-      movieId: reminder.movie_id,
-      title: reminder.title,
-      subtitle: [
-        reminder.season_number ? `第${reminder.season_number}季` : '',
-        reminder.episode_number ? `第${reminder.episode_number}集` : ''
-      ].filter(Boolean).join(' · ') || '新集即将上线',
-      reason: `播出日 ${reminder.air_date}`,
-      actionLabel: '查看详情',
-      priority: 88,
-      type: 'upcoming',
-    });
-  }
+  // 同一部作品只留一张卡（比如既在追又暂停时不会出现两条）
+  const seen = new Set<string>();
 
   return actions
     .sort((left, right) => right.priority - left.priority)
-    .filter((item, index, list) => list.findIndex(entry => entry.movieId === item.movieId && entry.type === item.type) === index)
+    .filter((item) => {
+      if (seen.has(item.movieId)) return false;
+      seen.add(item.movieId);
+      return true;
+    })
     .slice(0, 6);
 }
 

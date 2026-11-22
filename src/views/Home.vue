@@ -176,7 +176,7 @@
         <div class="flex items-center justify-between mb-6">
           <div>
             <h2 class="text-xl font-semibold text-gray-900">观影待办</h2>
-            <p class="text-gray-500 text-sm mt-1">接下来想看什么，先记下来</p>
+            <p class="text-gray-500 text-sm mt-1">接下来看什么；新集播出日程见下方「更新提醒」</p>
           </div>
           <router-link
             to="/library"
@@ -187,7 +187,7 @@
         </div>
 
         <div
-          v-if="loadingWatching || loadingReminders"
+          v-if="loadingWatching"
           class="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]"
         >
           <div v-for="i in 3" :key="`todo-sk-${i}`" class="todo-card-skeleton">
@@ -202,7 +202,7 @@
           v-else-if="actionItems.length === 0"
           tone="info"
           title="现在没有待办"
-          description="开始追剧或补几条在看记录后，再回来看看。"
+          description="还没有在追的剧集。新集播出日程看下方「更新提醒」。"
           hint="也可以从命令面板（⌘K）直接打开任意作品"
         />
 
@@ -601,7 +601,6 @@ const getActionTypeLabel = (type: string) => {
   const labels: Record<string, string> = {
     continue: '继续追剧',
     resume: '恢复进度',
-    upcoming: '新集提醒',
     review: '待复核'
   }
 
@@ -931,10 +930,6 @@ onMounted(() => {
   color: #a16207;
 }
 
-.todo-card-tag-upcoming {
-  background: rgba(220, 252, 231, 0.95);
-  color: #15803d;
-}
 
 .todo-card-link {
   font-size: 0.78rem;
