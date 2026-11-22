@@ -51,6 +51,26 @@ export function useHomeData() {
   const watchingMovies = ref<Movie[]>([]);
   const recentHistory = ref<Movie[]>([]);
   const reminderGroups = ref<TVReminderGroup[]>([]);
+
+  // 提醒范围：7 / 14 / 30 天，用户选择后记住
+  const REMINDER_RANGE_KEY = 'filmtrack-reminder-range';
+  const REMINDER_RANGE_OPTIONS = [
+    { value: 7, label: '7 天' },
+    { value: 14, label: '14 天' },
+    { value: 30, label: '30 天' }
+  ];
+
+  const readStoredRange = (): number => {
+    try {
+      const raw = Number(window.localStorage.getItem(REMINDER_RANGE_KEY));
+      if (REMINDER_RANGE_OPTIONS.some(option => option.value === raw)) return raw;
+    } catch {
+      // 隐私模式等场景读不到，用默认值
+    }
+    return 7;
+  };
+
+  const reminderRange = ref<number>(readStoredRange());
   // 待办只依赖「在追」列表，用 computed 派生，避免多处赋值彼此覆盖（加载顺序不同结果就不同）
   const actionItems = computed<MovieActionItem[]>(() => buildMovieActionItems(watchingMovies.value));
 
@@ -203,12 +223,19 @@ export function useHomeData() {
     });
   };
 
-  const loadUpdateReminders = async (movies?: Movie[]) => {
+  const loadUpdateReminders = async (
+    movies?: Movie[],
+    options: { forceRefresh?: boolean } = {}
+  ) => {
     try {
       loadingReminders.value = true;
       reminderError.value = '';
 
-      const result = await tvReminderService.getReminderGroups({ movies });
+      const result = await tvReminderService.getReminderGroups({
+        movies,
+        days: reminderRange.value,
+        forceRefresh: options.forceRefresh
+      });
       if (result.success && result.data) {
         reminderGroups.value = result.data;
         void notifyTodayAirings(result.data);
@@ -226,7 +253,23 @@ export function useHomeData() {
 
   const refreshReminders = async () => {
     const latestWatching = await loadWatchingMovies({ silent: true });
-    await loadUpdateReminders(latestWatching);
+    // 「刷新提醒」必须真的联网：否则 24 小时缓存会让它看起来什么都没发生
+    await loadUpdateReminders(latestWatching, { forceRefresh: true });
+  };
+
+  const setReminderRange = (days: number) => {
+    if (!REMINDER_RANGE_OPTIONS.some(option => option.value === days)) return;
+    if (reminderRange.value === days) return;
+
+    reminderRange.value = days;
+    try {
+      window.localStorage.setItem(REMINDER_RANGE_KEY, String(days));
+    } catch {
+      // 存不了也不影响本次使用
+    }
+
+    // 详情数据已有缓存，改范围只是重新筛选，无需重新联网
+    void loadUpdateReminders(watchingMovies.value);
   };
 
   const initializeData = async () => {
@@ -272,6 +315,9 @@ export function useHomeData() {
     getMovieImageURL,
     navigateToDetail,
     getTotalWatchedEpisodes,
+    reminderRange,
+    reminderRangeOptions: REMINDER_RANGE_OPTIONS,
+    setReminderRange,
     getRelativeDayLabel,
     formatReminderDate,
     formatEpisodeLabel,

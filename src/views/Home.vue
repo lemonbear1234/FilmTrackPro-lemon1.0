@@ -234,12 +234,26 @@
             </div>
             <div>
               <h2 class="text-xl font-semibold text-gray-900">更新提醒</h2>
-              <p class="text-gray-500 text-sm">未来7天内预计播出的剧集</p>
+              <p class="text-gray-500 text-sm">未来 {{ reminderRange }} 天内预计播出的剧集</p>
             </div>
+          </div>
+          <div class="flex items-center gap-2">
+          <div class="reminder-range" role="group" aria-label="提醒查看范围">
+            <button
+              v-for="option in reminderRangeOptions"
+              :key="`range-${option.value}`"
+              type="button"
+              class="reminder-range-button"
+              :class="{ 'reminder-range-button-active': reminderRange === option.value }"
+              :aria-pressed="reminderRange === option.value"
+              @click="setReminderRange(option.value)"
+            >
+              {{ option.label }}
+            </button>
           </div>
           <button
             class="inline-flex items-center px-3 py-2 text-sm font-medium text-blue-600 border border-blue-100 rounded-lg hover:bg-blue-50 transition-colors duration-200 disabled:opacity-60"
-            @click="refreshReminders"
+            @click="handleRefreshReminders"
             :disabled="loadingReminders"
           >
             <svg v-if="loadingReminders" class="animate-spin h-4 w-4 mr-2 text-blue-600" viewBox="0 0 24 24">
@@ -248,6 +262,7 @@
             </svg>
             <span>{{ loadingReminders ? '刷新中...' : '刷新提醒' }}</span>
           </button>
+          </div>
         </div>
 
         <div
@@ -279,7 +294,7 @@
           tone="info"
           :icon="BellRingIcon"
           title="近期没有即将更新的剧集"
-          description="记录更多正在播出的电视剧，影迹会自动整理出未来 7 天的播出表。"
+          description="记录更多正在播出的电视剧，影迹会自动整理出未来几天的播出表。"
           hint="今天有新集时会通过桌面通知提醒你（需要授予通知权限）"
         />
 
@@ -481,6 +496,7 @@ import {
 import CachedImage from '../components/ui/CachedImage.vue'
 import Skeleton from '../components/common/Skeleton.vue'
 import EmptyState from '../components/common/EmptyState.vue'
+import { toast } from '../utils/toast'
 import { useHomeData } from './Home/composables/useHomeData'
 
 const router = useRouter()
@@ -520,8 +536,26 @@ const {
   loadWatchingMovies,
   loadReplayHistory,
   refreshReminders,
-  initializeData
+  initializeData,
+  reminderRange,
+  reminderRangeOptions,
+  setReminderRange
 } = useHomeData()
+
+// 刷新提醒：确实联网后才给反馈，避免「点了没反应」的错觉
+const handleRefreshReminders = async () => {
+  await refreshReminders()
+  const total = reminderGroups.value.reduce((sum, group) => sum + group.items.length, 0)
+  if (reminderError.value) {
+    toast.error(reminderError.value)
+    return
+  }
+  toast.success(
+    total > 0
+      ? `已刷新，未来 ${reminderRange.value} 天共 ${total} 条更新`
+      : `已刷新，未来 ${reminderRange.value} 天暂无更新`
+  )
+}
 
 // 统计卡数字增长动画：8 张卡 40ms 错峰，800ms ease-out
 const animatedMovieTotal = useCountUp(
@@ -650,6 +684,34 @@ onMounted(() => {
 /* 卡片悬停阴影 */
 .group-hover\:shadow-lg:hover {
   box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.reminder-range {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 0.65rem;
+  background: rgba(241, 245, 249, 0.9);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.reminder-range-button {
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #64748b;
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.reminder-range-button:hover {
+  color: #1d4ed8;
+}
+
+.reminder-range-button-active {
+  background: #ffffff;
+  color: #1d4ed8;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
 }
 
 .update-reminder-card {

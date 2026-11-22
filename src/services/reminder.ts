@@ -6,8 +6,11 @@ import { databaseAPI } from './database-api';
 import { tmdbAPI } from '../utils/api';
 
 interface ReminderOptions {
+  /** 向后查看多少天，默认 7 */
   days?: number;
   movies?: Movie[];
+  /** 跳过 TMDb 详情缓存，强制联网（「刷新提醒」用） */
+  forceRefresh?: boolean;
 }
 
 class TVReminderService {
@@ -55,7 +58,7 @@ class TVReminderService {
    */
   public async getUpcomingReminders(options: ReminderOptions = {}): Promise<ApiResponse<TVEpisodeReminder[]>> {
     try {
-      const days = options.days ?? this.defaultRange;
+      const days = Math.min(60, Math.max(1, options.days ?? this.defaultRange));
       const tvShows = await this.loadWatchingTVShows(options.movies);
       const showsWithTmdbId = tvShows.filter(movie => movie.tmdb_id);
 
@@ -64,7 +67,9 @@ class TVReminderService {
       }
 
       const detailResults = await Promise.allSettled(
-        showsWithTmdbId.map(show => tmdbAPI.getTVDetails(show.tmdb_id!))
+        showsWithTmdbId.map(show =>
+          tmdbAPI.getTVDetails(show.tmdb_id!, { forceRefresh: options.forceRefresh })
+        )
       );
 
       const reminders: TVEpisodeReminder[] = [];

@@ -213,18 +213,27 @@ async function requestWithRateLimitRetry<T>(fn: () => Promise<T>): Promise<T> {
  */
 export const tmdbAPI = {
   // 通用API请求方法
+  // options.bypassCache：跳过缓存读取，直接联网并覆盖旧缓存（用于「刷新」按钮）
   async _request<T>(
     endpoint: string,
     params: Record<string, unknown> = {},
-    cacheKey: string
+    cacheKey: string,
+    options: { bypassCache?: boolean } = {}
   ): Promise<ApiResponse<T>> {
     // 检查缓存
-    const cachedResult = apiCache.get<ApiResponse<T>>(cacheKey);
-    if (cachedResult) {
-      return cachedResult;
+    if (!options.bypassCache) {
+      const cachedResult = apiCache.get<ApiResponse<T>>(cacheKey);
+      if (cachedResult) {
+        return cachedResult;
+      }
     }
 
-    return tmdbQueue.add(cacheKey, async () => {
+    // 强刷时换一个队列键，否则会复用仍在飞行中的旧请求，拿到的还是旧数据
+    const queueKey = options.bypassCache
+      ? `${cacheKey}#refresh-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      : cacheKey;
+
+    return tmdbQueue.add(queueKey, async () => {
       try {
         const response = await requestWithRateLimitRetry(() => tmdbClient.get(endpoint, { params }));
         const result = { success: true, data: response.data };
@@ -416,7 +425,7 @@ export const tmdbAPI = {
   },
 
   // 获取电视剧详情
-  async getTVDetails(tvId: number): Promise<ApiResponse<TMDbMovieDetail>> {
+  async getTVDetails(tvId: number, options: { forceRefresh?: boolean } = {}): Promise<ApiResponse<TMDbMovieDetail>> {
     if (!tvId) return { success: false, error: '电视剧ID不能为空' };
 
     // 生成缓存键
@@ -425,7 +434,8 @@ export const tmdbAPI = {
     return this._request(
       `/tv/${tvId}`,
       { append_to_response: 'credits,images,videos,recommendations' },
-      cacheKey
+      cacheKey,
+      { bypassCache: options.forceRefresh }
     );
   },
 
