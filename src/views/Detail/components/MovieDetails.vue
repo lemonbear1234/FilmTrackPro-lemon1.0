@@ -50,6 +50,7 @@
       :error-message="editError"
       @close="closeEdit"
       @save="handleSave"
+      @error="handleEditError"
     />
   </div>
 </template>
@@ -86,6 +87,11 @@ const closeEdit = () => {
   editOpen.value = false;
 };
 
+const handleEditError = (message: string) => {
+  editError.value = message;
+  toast.error(message);
+};
+
 const handleSave = async (patch: MovieDetailsExtraPatch) => {
   if (!props.movie || saving.value) return;
 
@@ -94,9 +100,14 @@ const handleSave = async (patch: MovieDetailsExtraPatch) => {
   try {
     const result = await movieStore.updateMovieExtraInfo(props.movie.id, patch);
     if (result.success && result.data) {
-      emit('updated', result.data as Movie);
+      const next = result.data as Movie;
+      emit('updated', next);
       editOpen.value = false;
-      toast.success('详细信息已更新');
+      toast.success(
+        patch.tmdb_id !== undefined
+          ? `已保存，TMDb ID 已改为 ${next.tmdb_id ?? '空'}`
+          : '详细信息已更新'
+      );
     } else {
       editError.value = result.error || '更新失败，请稍后重试';
       toast.error(editError.value);

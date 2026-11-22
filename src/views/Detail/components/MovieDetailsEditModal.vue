@@ -121,6 +121,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void;
   (e: 'save', patch: MovieDetailsExtraPatch): void;
+  (e: 'error', message: string): void;
 }>();
 
 const form = reactive({
@@ -179,8 +180,17 @@ watch(
   }
 );
 
-const parseNumber = (value: string): number | null => {
-  const trimmed = value.trim();
+/**
+ * 把输入框的值转成数字。
+ * 注意：`<input type="number">` 配 v-model 时 Vue 会自动把值转成 number（castToNumber），
+ * 所以这里必须同时兼容 number 和 string，不能直接调 .trim()，否则会抛 TypeError。
+ */
+const parseNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  const trimmed = String(value).trim();
   if (!trimmed) return null;
   const num = Number(trimmed);
   return Number.isFinite(num) ? num : null;
@@ -209,8 +219,11 @@ const handleSave = () => {
       tmdb_id: parseNumber(form.tmdbId)
     });
   } catch (error) {
+    // 不再只写控制台：出错必须让用户看见，否则表现就是「点了没反应」
     localBusy.value = false;
+    const message = error instanceof Error ? error.message : String(error);
     console.error('构造保存数据失败:', error);
+    emit('error', `保存失败：${message}`);
   }
 };
 </script>
