@@ -53,12 +53,13 @@ export function useHomeData() {
   const recentHistory = ref<Movie[]>([]);
   const reminderGroups = ref<TVReminderGroup[]>([]);
 
-  // 提醒范围：7 / 14 / 30 天，用户选择后记住
+  // 提醒范围：7 / 14 / 30 天，用户选择后记住；「全部」= 90 天
   const REMINDER_RANGE_KEY = 'filmtrack-reminder-range';
   const REMINDER_RANGE_OPTIONS = [
     { value: 7, label: '7 天' },
     { value: 14, label: '14 天' },
-    { value: 30, label: '30 天' }
+    { value: 30, label: '30 天' },
+    { value: 90, label: '全部' }
   ];
 
   const readStoredRange = (): number => {
@@ -72,6 +73,9 @@ export function useHomeData() {
   };
 
   const reminderRange = ref<number>(readStoredRange());
+
+  // 当前窗口之外还有多少条手动提醒（沙丘3 这种记上映日的，别让它无声消失）
+  const reminderBeyondRange = ref(0);
 
   // 手动添加提醒时的候选作品（本地影视库全量，按需加载）
   const reminderMovieOptions = ref<Movie[]>([]);
@@ -264,11 +268,16 @@ export function useHomeData() {
       loadingReminders.value = true;
       reminderError.value = '';
 
-      const result = await tvReminderService.getReminderGroups({
-        movies,
-        days: reminderRange.value,
-        forceRefresh: options.forceRefresh
-      });
+      const [result, beyond] = await Promise.all([
+        tvReminderService.getReminderGroups({
+          movies,
+          days: reminderRange.value,
+          forceRefresh: options.forceRefresh
+        }),
+        tvReminderService.countManualRemindersBeyondRange(reminderRange.value)
+      ]);
+      reminderBeyondRange.value = beyond;
+
       if (result.success && result.data) {
         reminderGroups.value = result.data;
         void notifyTodayAirings(result.data);
@@ -279,6 +288,7 @@ export function useHomeData() {
       console.error('获取更新提醒失败:', error);
       reminderError.value = error instanceof Error ? error.message : '获取更新提醒失败';
       reminderGroups.value = [];
+      reminderBeyondRange.value = 0;
     } finally {
       loadingReminders.value = false;
     }
@@ -350,6 +360,7 @@ export function useHomeData() {
     getTotalWatchedEpisodes,
     reminderRange,
     reminderRangeOptions: REMINDER_RANGE_OPTIONS,
+    reminderBeyondRange,
     reminderMovieOptions,
     loadReminderMovieOptions,
     setReminderRange,

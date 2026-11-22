@@ -32,7 +32,7 @@ describe('更新提醒：手动增删改查', () => {
     })
 
     it('迁移版本已推进，老库能补建表', () => {
-      assert.ok(/LATEST_SCHEMA_VERSION = 6/.test(schema), '迁移版本应推进到 6')
+      assert.ok(/LATEST_SCHEMA_VERSION = 7/.test(schema), '迁移版本应推进到 7')
       assert.ok(
         /name: 'manual-reminder-entries'/.test(schema),
         '缺少 v4 迁移'
@@ -68,7 +68,7 @@ describe('更新提醒：手动增删改查', () => {
 
     it('修改与删除只作用于手动条目', () => {
       assert.ok(
-        /WHERE id = \$13 AND source = 'manual'/.test(dao),
+        /WHERE id = \$15 AND source = 'manual'/.test(dao),
         '更新不应改到忽略标记'
       )
       assert.ok(
@@ -94,8 +94,8 @@ describe('更新提醒：手动增删改查', () => {
       assert.ok(/collectAutoReminders/.test(service), '缺少自动提醒收集')
       assert.ok(/collectManualReminders/.test(service), '缺少手动提醒收集')
       assert.ok(
-        /const merged = \[\.\.\.autoFiltered, \.\.\.manualFiltered\]/.test(service),
-        '两类提醒应合并'
+        /this\.aggregateByShow\(\[\.\.\.autoFiltered, \.\.\.manualFiltered\]\)/.test(service),
+        '两类提醒应合并后按剧聚合'
       )
     })
 
@@ -104,14 +104,16 @@ describe('更新提醒：手动增删改查', () => {
       assert.ok(/!manualKeys\.has\(key\)/.test(service), '手动条目应覆盖同一条自动提醒')
     })
 
-    it('手动提醒不受「未来 N 天」限制', () => {
-      const manualBlock = service.slice(
-        service.indexOf('private async collectManualReminders'),
-        service.indexOf('public async getUpcomingReminders')
+    it('时间范围对手动与自动一视同仁，窗口外会单独统计', () => {
+      const limitBlock = service.slice(
+        service.indexOf('const aggregateByShow'),
+        service.indexOf('public async getReminderGroups')
       )
+      assert.ok(/is_past\) return true/.test(service), '已播出不受窗口影响')
+      assert.ok(/offset <= days/.test(service), '超出手动窗口的条目不再进列表')
       assert.ok(
-        !/isWithinRange/.test(manualBlock),
-        '手动添加的日期不应被天数范围过滤掉'
+        /countManualRemindersBeyondRange/.test(service),
+        '窗口外的手动提醒要能统计出来提示用户'
       )
       assert.ok(
         /PAST_MANUAL_KEEP_DAYS/.test(service),

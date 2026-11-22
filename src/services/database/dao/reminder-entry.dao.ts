@@ -11,11 +11,33 @@ import type { ApiResponse, ReminderEntry, ReminderEntryForm, DatabaseRow } from 
 import { DatabaseConnection } from '../connection';
 import { DatabaseUtils } from '../utils';
 
-type ReminderEntryRow = DatabaseRow & ReminderEntry;
+type ReminderEntryRow = DatabaseRow &
+  Omit<ReminderEntry, 'air_weekdays'> & { air_weekdays?: string | number[] | null };
 
 const SELECT_COLUMNS = `id, source, movie_id, title, tmdb_id, poster_path,
   air_date, season_number, episode_number, episode_name, repeat_days, media_type,
-  notes, created_at, updated_at`;
+  season_total_episodes, air_weekdays, notes, created_at, updated_at`;
+
+/** 库里存的是 "1,2"，接口层统一成 number[] */
+const parseWeekdays = (raw: string | number[] | null | undefined): number[] | null => {
+  if (Array.isArray(raw)) return raw.length > 0 ? raw : null;
+  if (!raw) return null;
+
+  const days = String(raw)
+    .split(',')
+    .map(value => Number(value.trim()))
+    .filter(value => Number.isInteger(value) && value >= 1 && value <= 7);
+
+  return days.length > 0 ? Array.from(new Set(days)).sort((a, b) => a - b) : null;
+};
+
+const mapRow = (row: ReminderEntryRow): ReminderEntry => ({
+  ...row,
+  season_total_episodes: row.season_total_episodes ?? null,
+  air_weekdays: parseWeekdays(row.air_weekdays),
+  repeat_days: row.repeat_days ?? null,
+  media_type: row.media_type ?? null
+});
 
 export class ReminderEntryDAO {
   /** 获取全部手动添加的提醒（按播出日期升序） */
@@ -28,7 +50,7 @@ export class ReminderEntryDAO {
          ORDER BY air_date ASC, created_at ASC`
       )) as ReminderEntryRow[];
 
-      return { success: true, data: rows ?? [] };
+      return { success: true, data: (rows ?? []).map(mapRow) };
     } catch (error) {
       return { success: false, error: `获取手动提醒失败: ${error}` };
     }
@@ -43,7 +65,7 @@ export class ReminderEntryDAO {
          WHERE source = 'dismissed'`
       )) as ReminderEntryRow[];
 
-      return { success: true, data: rows ?? [] };
+      return { success: true, data: (rows ?? []).map(mapRow) };
     } catch (error) {
       return { success: false, error: `获取忽略记录失败: ${error}` };
     }
@@ -60,8 +82,9 @@ export class ReminderEntryDAO {
         `INSERT INTO reminder_entries (
           id, source, movie_id, title, tmdb_id, poster_path,
           air_date, season_number, episode_number, episode_name,
-          repeat_days, media_type, notes, created_at, updated_at
-        ) VALUES ($1, 'manual', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+          repeat_days, media_type, season_total_episodes, air_weekdays,
+          notes, created_at, updated_at
+        ) VALUES ($1, 'manual', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
         [
           id,
           form.movie_id || null,
@@ -74,6 +97,8 @@ export class ReminderEntryDAO {
           form.episode_name || null,
           form.repeat_days ?? null,
           form.media_type ?? null,
+          form.season_total_episodes ?? null,
+          form.air_weekdays && form.air_weekdays.length > 0 ? form.air_weekdays.join(',') : null,
           form.notes || null,
           timestamp,
           timestamp
@@ -89,7 +114,7 @@ export class ReminderEntryDAO {
         return { success: false, error: '提醒已写入但读回失败，请刷新后查看' };
       }
 
-      return { success: true, data: rows[0] };
+      return { success: true, data: mapRow(rows[0]) };
     } catch (error) {
       return { success: false, error: `添加提醒失败: ${error}` };
     }
@@ -109,8 +134,9 @@ export class ReminderEntryDAO {
           movie_id = $1, title = $2, tmdb_id = $3, poster_path = $4,
           air_date = $5, season_number = $6, episode_number = $7,
           episode_name = $8, repeat_days = $9, media_type = $10,
-          notes = $11, updated_at = $12
-        WHERE id = $13 AND source = 'manual'`,
+          season_total_episodes = $11, air_weekdays = $12,
+          notes = $13, updated_at = $14
+        WHERE id = $15 AND source = 'manual'`,
         [
           form.movie_id || null,
           form.title,
@@ -122,6 +148,8 @@ export class ReminderEntryDAO {
           form.episode_name || null,
           form.repeat_days ?? null,
           form.media_type ?? null,
+          form.season_total_episodes ?? null,
+          form.air_weekdays && form.air_weekdays.length > 0 ? form.air_weekdays.join(',') : null,
           form.notes || null,
           timestamp,
           id
@@ -137,7 +165,7 @@ export class ReminderEntryDAO {
         return { success: false, error: '这条提醒已经不存在了，可能已被删除' };
       }
 
-      return { success: true, data: rows[0] };
+      return { success: true, data: mapRow(rows[0]) };
     } catch (error) {
       return { success: false, error: `修改提醒失败: ${error}` };
     }

@@ -151,6 +151,17 @@ export interface TMDbSeason {
   air_date: string;
 }
 
+/** 某一季的详细信息（含整季集表，用来算总集数与实际播出日） */
+export interface TMDbSeasonDetail {
+  id: number;
+  name: string;
+  overview?: string;
+  air_date?: string;
+  season_number: number;
+  poster_path?: string | null;
+  episodes: TMDbEpisode[];
+}
+
 /** TMDb 单集信息 */
 export interface TMDbEpisode {
   id: number;
@@ -294,6 +305,15 @@ export interface TVEpisodeReminder {
   repeat_days?: number | null;
   /** 电影还是剧集：电影没有季集与周期，卡片文案也不同 */
   media_type?: MovieType | null;
+  /** 本季共几集：TMDb 优先，TMDb 没有时用用户手填的值；为空表示不确定 */
+  total_episodes?: number | null;
+  /** 周更日（1=周一 … 7=周日）；为空表示按 repeat_days 推算 */
+  air_weekdays?: number[] | null;
+  /**
+   * 同一部剧在最近 7 天内还有的其它集（周一周二各更一集时用）
+   * 列表按剧聚合，只留一张卡，其余集数放在这里
+   */
+  extra_airings?: Array<{ air_date: string; episode_number?: number | null }>;
   /** 周期提醒里第几场（0 = 用户填的那一集，>0 = 按周期自动补出来的） */
   occurrence_sequence?: number;
   /** 周期提醒的「原点」：自动补出来的场次靠它还原首播日/首集，编辑时才不会改错 */
@@ -322,6 +342,10 @@ export interface ReminderEntry {
   /** 每多少天更新一集；为空表示不重复 */
   repeat_days?: number | null;
   media_type?: MovieType | null;
+  /** 本季共几集（TMDb 拿不到时手填），周期推算到这一集就停 */
+  season_total_episodes?: number | null;
+  /** 周更日（1=周一 … 7=周日），可多选 */
+  air_weekdays?: number[] | null;
   notes?: string | null;
   created_at: string;
   updated_at: string;
@@ -340,6 +364,10 @@ export interface ReminderEntryForm {
   /** 每多少天更新一集；为空表示不重复 */
   repeat_days?: number | null;
   media_type?: MovieType | null;
+  /** 本季共几集，周期推算到这一集就停（TMDb 有数据时自动带出） */
+  season_total_episodes?: number | null;
+  /** 周更日（1=周一 … 7=周日），可多选 */
+  air_weekdays?: number[] | null;
   notes?: string | null;
 }
 
@@ -357,6 +385,8 @@ export interface ReminderEditPrefill {
   episodeName?: string | null;
   repeatDays?: number | null;
   mediaType?: MovieType | null;
+  totalEpisodes?: number | null;
+  airWeekdays?: number[] | null;
   notes?: string | null;
 }
 

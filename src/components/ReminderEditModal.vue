@@ -129,14 +129,23 @@
               @update:model-value="dateTouched = true"
             />
           </div>
-          <div v-if="!isMovie" class="grid grid-cols-2 gap-3">
+          <div v-if="!isMovie" class="grid grid-cols-3 gap-2">
             <div>
               <label class="reminder-label">季</label>
-              <TextField v-model="seasonInput" type="number" input-mode="numeric" placeholder="如 1" />
+              <TextField v-model="seasonInput" type="number" input-mode="numeric" placeholder="如 8" />
             </div>
             <div>
               <label class="reminder-label">集</label>
-              <TextField v-model="episodeInput" type="number" input-mode="numeric" placeholder="如 8" />
+              <TextField v-model="episodeInput" type="number" input-mode="numeric" placeholder="如 7" />
+            </div>
+            <div>
+              <label class="reminder-label">本季共几集</label>
+              <TextField
+                v-model="totalEpisodesInput"
+                type="number"
+                input-mode="numeric"
+                placeholder="如 10"
+              />
             </div>
           </div>
         </div>
@@ -164,6 +173,28 @@
               placeholder="每隔多少天更新一集，如 3"
             />
           </div>
+
+          <div v-if="showWeekdayPicker" class="mt-3">
+            <label class="reminder-label">每周更新日（可多选）</label>
+            <div class="reminder-weekday-group" role="group" aria-label="每周更新日">
+              <button
+                v-for="day in WEEKDAY_OPTIONS"
+                :key="`weekday-${day.value}`"
+                type="button"
+                class="reminder-weekday-button"
+                :class="{ 'reminder-weekday-button-active': airWeekdays.includes(day.value) }"
+                :aria-pressed="airWeekdays.includes(day.value)"
+                :title="day.full"
+                @click="toggleWeekday(day.value)"
+              >
+                {{ day.label }}
+              </button>
+            </div>
+            <p class="reminder-hint">
+              周一、周二双更的剧就把两天都勾上；不勾就按上面的周期平均推。
+            </p>
+          </div>
+
           <p class="reminder-hint">{{ cycleHint }}</p>
         </div>
 
@@ -237,7 +268,7 @@ import CachedImage from './ui/CachedImage.vue';
 import type { Movie, MovieType, ReminderEditPrefill, ReminderEntryForm, TMDbMovie } from '../types';
 import { tvReminderService } from '../services/reminder';
 import { tmdbAPI } from '../utils/api';
-import { todayLocalDate } from '../utils/date';
+import { todayLocalDate, weekdayOfDate } from '../utils/date';
 import { useMovieStore } from '../stores/movie';
 
 const props = withDefaults(
@@ -278,11 +309,23 @@ const TYPE_OPTIONS: Array<{ value: MovieType; label: string }> = [
   { value: 'movie', label: '电影' },
   { value: 'tv', label: '剧集' }
 ];
+/** 周几多选：1=周一 … 7=周日，和 date.ts 的 weekdayOfDate 对齐 */
+const WEEKDAY_OPTIONS = [
+  { value: 1, label: '一', full: '周一' },
+  { value: 2, label: '二', full: '周二' },
+  { value: 3, label: '三', full: '周三' },
+  { value: 4, label: '四', full: '周四' },
+  { value: 5, label: '五', full: '周五' },
+  { value: 6, label: '六', full: '周六' },
+  { value: 7, label: '日', full: '周日' }
+];
 
 const titleInput = ref('');
 const airDate = ref('');
 const seasonInput = ref('');
 const episodeInput = ref('');
+const totalEpisodesInput = ref('');
+const airWeekdays = ref<number[]>([]);
 const episodeNameInput = ref('');
 const notesInput = ref('');
 const cyclePreset = ref<number>(NEW_ENTRY_REPEAT_DAYS);
@@ -366,15 +409,46 @@ const resolvedRepeatDays = computed(() => {
   return value === null ? 0 : Math.floor(value);
 });
 
+/** 只有每周 / 每两周才需要选周几，其余周期按天数推 */
+const showWeekdayPicker = computed(
+  () => !isMovie.value && (resolvedRepeatDays.value === 7 || resolvedRepeatDays.value === 14)
+);
+
+const weekdayText = computed(() => {
+  if (airWeekdays.value.length === 0) return '';
+  return airWeekdays.value
+    .slice()
+    .sort((a, b) => a - b)
+    .map(day => WEEKDAY_OPTIONS.find(option => option.value === day)?.full ?? '')
+    .filter(Boolean)
+    .join('、');
+});
+
 const cycleHint = computed(() => {
   if (!customCycleValid.value) {
     return '自定义周期请填 1-365 之间的天数';
   }
-  if (resolvedRepeatDays.value >= 1) {
-    return `每 ${resolvedRepeatDays.value} 天更新一集，保存后会自动补齐后续集数（最多 6 集），不用一集一集添加`;
+  if (resolvedRepeatDays.value < 1) {
+    return '只提醒这一集；后续集数可以在保存后按周期补上';
   }
-  return '只提醒这一集；后续集数可以在保存后按周期补上';
+
+  const total = toNumberOrNull(totalEpisodesInput.value);
+  const baseEpisode = toNumberOrNull(episodeInput.value);
+  const span = total && baseEpisode ? `，按本季 ${total} 集收尾` : '';
+
+  if (weekdayText.value) {
+    return `${weekdayText.value}更新${span}；没填「本季共几集」就只提醒你填的这一集`;
+  }
+  return `每 ${resolvedRepeatDays.value} 天更新一集${span}；没填「本季共几集」就只提醒你填的这一集`;
 });
+
+const toggleWeekday = (day: number) => {
+  if (airWeekdays.value.includes(day)) {
+    airWeekdays.value = airWeekdays.value.filter(value => value !== day);
+  } else {
+    airWeekdays.value = [...airWeekdays.value, day].sort((a, b) => a - b);
+  }
+};
 
 /** 把已有的 repeat_days 还原到选项上 */
 const applyRepeatDays = (days: number | null | undefined) => {
@@ -399,6 +473,12 @@ const resetForm = () => {
   airDate.value = prefill?.airDate || todayLocalDate();
   seasonInput.value = prefill?.season ? String(prefill.season) : '';
   episodeInput.value = prefill?.episode ? String(prefill.episode) : '';
+  totalEpisodesInput.value = prefill?.totalEpisodes ? String(prefill.totalEpisodes) : '';
+  airWeekdays.value = prefill?.airWeekdays
+    ? [...prefill.airWeekdays]
+    : prefill?.entryId
+      ? []
+      : [weekdayOfDate(airDate.value)].filter(day => Number.isFinite(day));
   episodeNameInput.value = prefill?.episodeName ?? '';
   notesInput.value = prefill?.notes ?? '';
   mediaType.value = prefill?.mediaType ?? 'tv';
@@ -414,6 +494,17 @@ const resetForm = () => {
   errorMessage.value = '';
   showDropdown.value = false;
 };
+
+// 只勾了一天时，让它跟着播出日期走，避免「日期是周四、周更日却是周一」
+watch(airDate, value => {
+  if (isMovie.value || !value) return;
+  if (airWeekdays.value.length > 1) return;
+
+  const weekday = weekdayOfDate(value);
+  if (Number.isFinite(weekday)) {
+    airWeekdays.value = [weekday];
+  }
+});
 
 watch(
   () => [props.isOpen, props.prefill] as const,
@@ -488,6 +579,8 @@ const setMediaType = (type: MovieType) => {
   if (type === 'movie') {
     seasonInput.value = '';
     episodeInput.value = '';
+    totalEpisodesInput.value = '';
+    airWeekdays.value = [];
     episodeNameInput.value = '';
     cyclePreset.value = 0;
     customCycleInput.value = '';
@@ -522,14 +615,60 @@ const pickLocalMovie = (movie: Movie) => {
   if (movie.type === 'movie') {
     seasonInput.value = '';
     episodeInput.value = '';
+    totalEpisodesInput.value = '';
+    airWeekdays.value = [];
     episodeNameInput.value = '';
     cyclePreset.value = 0;
+  } else {
+    // 本地剧集可能带着 TMDb ID，顺手把「下一集 / 总集数」补齐
+    if (movie.tmdb_id) void applyTmdbTvDetail(movie.tmdb_id);
   }
 
   showDropdown.value = false;
 };
 
-const pickTmdbItem = (item: TMDbMovie) => {
+/**
+ * 选中 TMDb 剧集后拉一次详情，把「下一集」的季/集/日期和本季总集数带上
+ * 关键：不能用 first_air_date（那是全剧首播，可能早到 2019 年），
+ * 否则一填周期就会从首播日往后推，算出「第 377 集」这种数字
+ */
+const applyTmdbTvDetail = async (id: number, fallbackDate?: string) => {
+  try {
+    const detail = await tmdbAPI.getTVDetails(id);
+    const data = detail.success ? detail.data : undefined;
+
+    if (!data) {
+      if (!dateTouched.value && fallbackDate) airDate.value = fallbackDate;
+      return;
+    }
+
+    const target = data.next_episode_to_air ?? data.last_episode_to_air ?? null;
+
+    if (!target) {
+      const date = data.first_air_date || fallbackDate;
+      if (!dateTouched.value && date) airDate.value = date;
+      return;
+    }
+
+    if (!seasonInput.value) seasonInput.value = String(target.season_number ?? '');
+    if (!episodeInput.value) episodeInput.value = String(target.episode_number ?? '');
+
+    const total = (data.seasons ?? []).find(
+      season => season.season_number === target.season_number
+    )?.episode_count;
+    if (total && !totalEpisodesInput.value) totalEpisodesInput.value = String(total);
+
+    if (!dateTouched.value && target.air_date) airDate.value = target.air_date;
+    if (target.air_date && !props.prefill?.entryId) {
+      airWeekdays.value = [weekdayOfDate(target.air_date)];
+    }
+  } catch (error) {
+    console.warn('读取 TMDb 剧集排期失败:', error);
+    if (!dateTouched.value && fallbackDate) airDate.value = fallbackDate;
+  }
+};
+
+const pickTmdbItem = async (item: TMDbMovie) => {
   window.clearTimeout(hideTimer);
   const type: MovieType = item.media_type === 'tv' ? 'tv' : 'movie';
 
@@ -542,14 +681,16 @@ const pickTmdbItem = (item: TMDbMovie) => {
   if (type === 'movie') {
     seasonInput.value = '';
     episodeInput.value = '';
+    totalEpisodesInput.value = '';
+    airWeekdays.value = [];
     episodeNameInput.value = '';
     cyclePreset.value = 0;
-  }
 
-  // 日期还没被手动改过，就用 TMDb 的上映/首播日顶上
-  const tmdbDate = type === 'movie' ? item.release_date : item.first_air_date;
-  if (!dateTouched.value && tmdbDate) {
-    airDate.value = tmdbDate;
+    if (!dateTouched.value && item.release_date) {
+      airDate.value = item.release_date;
+    }
+  } else {
+    await applyTmdbTvDetail(item.id, item.first_air_date);
   }
 
   showDropdown.value = false;
@@ -573,6 +714,11 @@ const buildForm = (linkedId: string | null): ReminderEntryForm => ({
   episode_name: isMovie.value ? null : episodeNameInput.value.trim() || null,
   repeat_days: !isMovie.value && resolvedRepeatDays.value >= 1 ? resolvedRepeatDays.value : null,
   media_type: mediaType.value,
+  season_total_episodes: isMovie.value ? null : toNumberOrNull(totalEpisodesInput.value),
+  air_weekdays:
+    !isMovie.value && showWeekdayPicker.value && airWeekdays.value.length > 0
+      ? [...airWeekdays.value].sort((a, b) => a - b)
+      : null,
   notes: notesInput.value.trim() || null
 });
 
@@ -623,6 +769,24 @@ const handleSave = async () => {
     return;
   }
 
+  if (!isMovie.value) {
+    const total = toNumberOrNull(totalEpisodesInput.value);
+    const episode = toNumberOrNull(episodeInput.value);
+
+    if (total !== null && episode === null) {
+      errorMessage.value = '填了本季总集数，请同时填清起始集数';
+      return;
+    }
+    if (total !== null && episode !== null && total < episode) {
+      errorMessage.value = '本季总集数不能小于起始集数';
+      return;
+    }
+    if (total !== null && (total < 1 || total > 999)) {
+      errorMessage.value = '本季总集数请填 1-999 之间的数字';
+      return;
+    }
+  }
+
   busy.value = true;
   errorMessage.value = '';
 
@@ -637,6 +801,19 @@ const handleSave = async () => {
     }
 
     const form = buildForm(linkedId);
+
+    // 没填总集数但知道 TMDb ID：保存前补一次，省得用户自己去查「这季共几集」
+    if (!isMovie.value && !form.season_total_episodes && tmdbId.value && form.season_number) {
+      try {
+        const seasonDetail = await tmdbAPI.getTVSeasonDetails(tmdbId.value, form.season_number);
+        const count = seasonDetail.success ? seasonDetail.data?.episodes?.length ?? 0 : 0;
+        if (count > 0) {
+          form.season_total_episodes = count;
+        }
+      } catch (error) {
+        console.warn('读取本季集数失败，按未填处理:', error);
+      }
+    }
     const result = isEditing.value && props.prefill?.entryId
       ? await tvReminderService.updateReminder(props.prefill.entryId, form)
       : await tvReminderService.createReminder(form);
@@ -745,6 +922,38 @@ const handleClose = () => {
   background: rgba(37, 99, 235, 0.08);
   color: #1d4ed8;
   font-weight: 600;
+}
+
+.reminder-weekday-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.reminder-weekday-button {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(226, 232, 240, 1);
+  background: rgba(248, 250, 252, 0.9);
+  font-size: 0.78rem;
+  color: #475569;
+  transition: all 160ms ease;
+}
+
+.reminder-weekday-button:hover {
+  border-color: rgba(191, 219, 254, 1);
+  color: #1d4ed8;
+}
+
+.reminder-weekday-button-active {
+  border-color: rgba(37, 99, 235, 0.9);
+  background: rgba(37, 99, 235, 1);
+  color: #ffffff;
+}
+
+.reminder-weekday-button-active:hover {
+  color: #ffffff;
 }
 
 .reminder-hint {

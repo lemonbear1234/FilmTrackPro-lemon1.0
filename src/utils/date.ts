@@ -58,3 +58,24 @@ export function toDateOnly(value?: string | null): string | null {
   const matched = String(value).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
   return matched ? matched[0] : null;
 }
+
+/**
+ * 星期几，1 = 周一 … 7 = 周日
+ * 周更日（周一周二双更）靠它比对，不能直接用 Date.getDay()（周日是 0）
+ */
+export function weekdayOfDate(value: string): number {
+  const matched = String(value ?? '').trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!matched) {
+    return Number.NaN;
+  }
+
+  const date = new Date(Date.UTC(Number(matched[1]), Number(matched[2]) - 1, Number(matched[3])));
+  const day = date.getUTCDay();
+  return day === 0 ? 7 : day;
+}
+
+/** 所在周的周一（周一为一周起点，和 weekdayOfDate 对齐） */
+export function startOfWeekDate(value: string): string {
+  const weekday = weekdayOfDate(value);
+  return Number.isNaN(weekday) ? value : addDaysToDate(value, 1 - weekday);
+}

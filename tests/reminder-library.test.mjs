@@ -34,10 +34,14 @@ describe('更新提醒：TMDb 直选与自动进库', () => {
         /ALTER TABLE reminder_entries ADD COLUMN media_type TEXT/.test(schema),
         '缺少 media_type 补列迁移'
       )
-      assert.ok(/LATEST_SCHEMA_VERSION = 6/.test(schema), '迁移版本应推进到 6')
+      assert.ok(/LATEST_SCHEMA_VERSION = 7/.test(schema), '迁移版本应推进到 7')
       assert.ok(
         /version: 6,[\s\S]{0,200}reminder-media-type/.test(schema),
         '缺少 v6 迁移'
+      )
+      assert.ok(
+        /version: 7,[\s\S]{0,200}reminder-season-meta/.test(schema),
+        '缺少 v7 迁移'
       )
     })
 
@@ -47,7 +51,7 @@ describe('更新提醒：TMDb 直选与自动进库', () => {
     })
 
     it('增改都会写类型字段', () => {
-      assert.ok(/media_type,\s*\n\s*notes/.test(dao), '查询未取 media_type')
+      assert.ok(/media_type,\s*\n\s*season_total_episodes/.test(dao), '查询未取 media_type')
       assert.ok(/media_type = \$10/.test(dao), '更新未写 media_type')
       assert.ok(/form\.media_type \?\? null/.test(dao), '写入时应允许为空')
     })
@@ -57,10 +61,12 @@ describe('更新提醒：TMDb 直选与自动进库', () => {
     it('电影不落季集与周期，避免推算出不存在的集数', () => {
       const start = service.indexOf('private normalizeForm')
       const block = service.slice(start, service.indexOf('public async deleteReminder', start))
-      assert.ok(/form\.media_type !== 'movie'/.test(block), '应按类型分流')
+      assert.ok(/form\.media_type === 'movie'/.test(block), '应按类型分流')
       assert.ok(/season_number: null/.test(block), '电影应清空季')
       assert.ok(/episode_number: null/.test(block), '电影应清空集')
       assert.ok(/repeat_days: null/.test(block), '电影应清空更新周期')
+      assert.ok(/season_total_episodes: null/.test(block), '电影应清空本季总集数')
+      assert.ok(/air_weekdays: null/.test(block), '电影应清空周更日')
     })
 
     it('海报只接受标题确实对得上的 TMDb 结果', () => {
@@ -93,11 +99,22 @@ describe('更新提醒：TMDb 直选与自动进库', () => {
       assert.ok(/useFreeText/.test(modal), '兜底入口未清掉关联')
     })
 
-    it('选中 TMDb 结果会带出类型、海报与上映日期', () => {
+    it('选中 TMDb 结果会带出类型、海报与日期', () => {
       assert.ok(/pickTmdbItem/.test(modal), '缺少 TMDb 结果选择')
       assert.ok(/posterPath\.value = item\.poster_path/.test(modal), '未带出海报')
-      assert.ok(/airDate\.value = tmdbDate/.test(modal), '未带出上映/首播日期')
-      assert.ok(/!dateTouched\.value && tmdbDate/.test(modal), '不应覆盖用户手填的日期')
+      assert.ok(
+        /!dateTouched\.value && item\.release_date/.test(modal),
+        '电影应带出上映日期'
+      )
+      assert.ok(/applyTmdbTvDetail/.test(modal), '剧集应按下一集填日期与集数')
+      assert.ok(
+        /!dateTouched\.value && target\.air_date/.test(modal),
+        '剧集不应覆盖用户手填的日期'
+      )
+      assert.ok(
+        !/type === 'movie' \? item\.release_date : item\.first_air_date/.test(modal),
+        '剧集不能再用首播日当提醒日期，否则会算出第 377 集'
+      )
     })
 
     it('电影隐藏季集与更新周期，日期改叫上映日期', () => {

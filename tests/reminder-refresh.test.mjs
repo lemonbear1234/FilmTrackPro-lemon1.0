@@ -105,16 +105,34 @@ describe('更新提醒：范围可调', () => {
   it('天数会传进提醒服务并被夹在合理区间', () => {
     assert.ok(/days: reminderRange\.value/.test(homeData), '加载提醒时应带上当前范围')
     assert.ok(
-      /Math\.min\(60, Math\.max\(1, options\.days/.test(reminder),
-      '异常天数应被夹到 1–60 天'
+      /Math\.min\(365, Math\.max\(1, options\.days/.test(reminder),
+      '异常天数应被夹到 1–365 天'
     )
   })
 
-  it('页面上有范围切换入口', () => {
+  it('页面上有范围切换入口，并带「全部」', () => {
     assert.ok(/reminder-range/.test(homeView), '缺少范围分段控件')
     assert.ok(
-      /未来 \{\{ reminderRange \}\} 天内/.test(homeView),
+      /未来 \$\{reminderRange\} 天/.test(homeView),
       '副标题应显示当前范围'
     )
+    assert.ok(
+      /\{ value: 90, label: '全部' \}/.test(homeData),
+      '缺少「全部」档，窗口外的提醒没有出口可看'
+    )
+  })
+
+  it('范围对自动与手动一致，窗口外的条目不会无声消失', () => {
+    assert.ok(
+      /offset <= days/.test(reminder),
+      '自动、手动应共用同一个窗口'
+    )
+    assert.ok(
+      /countManualRemindersBeyondRange/.test(reminder) &&
+        /countManualRemindersBeyondRange\(reminderRange\.value\)/.test(homeData),
+      '应统计窗口外的手动提醒'
+    )
+    assert.ok(/reminderBeyondRange/.test(homeView), '界面上要提示「另有 N 条在范围外」')
+    assert.ok(/reminder-empty-range/.test(homeView), '范围内为空但窗口外有时，也要给出入口')
   })
 })

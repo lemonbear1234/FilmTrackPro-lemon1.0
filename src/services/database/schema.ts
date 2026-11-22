@@ -13,7 +13,7 @@ type Migration = {
   up: (db: Awaited<ReturnType<typeof DatabaseConnection.getRawInstance>>) => Promise<void>
 }
 
-const LATEST_SCHEMA_VERSION = 6
+const LATEST_SCHEMA_VERSION = 7
 
 const MOVIES_TABLE_SQL = `CREATE TABLE IF NOT EXISTS movies (
   id TEXT PRIMARY KEY,
@@ -105,6 +105,9 @@ const MOVIE_PLAYBACK_PROGRESS_TABLE_SQL = `CREATE TABLE IF NOT EXISTS movie_play
  *
  * media_type：'movie' / 'tv'，决定卡片上是「上映提醒」还是「播出提醒」，
  * 以及编辑时是否显示季集与更新周期。为空时按剧集处理，兼容老数据。
+ *
+ * season_total_episodes：本季共几集，周期推算到这一集就停，避免凭空造出「第 377 集」。
+ * air_weekdays：周更日，逗号分隔的 1-7（1=周一）；周一周二双更时填「1,2」。
  */
 const REMINDER_ENTRIES_TABLE_SQL = `CREATE TABLE IF NOT EXISTS reminder_entries (
   id TEXT PRIMARY KEY,
@@ -119,6 +122,8 @@ const REMINDER_ENTRIES_TABLE_SQL = `CREATE TABLE IF NOT EXISTS reminder_entries 
   episode_name TEXT,
   repeat_days INTEGER,
   media_type TEXT,
+  season_total_episodes INTEGER,
+  air_weekdays TEXT,
   notes TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -195,7 +200,9 @@ const MOVIE_PLAYBACK_PROGRESS_COLUMN_MIGRATIONS = [
 /** 提醒表后续补的字段（老库缺列时逐条补上） */
 const REMINDER_ENTRIES_COLUMN_MIGRATIONS = [
   'ALTER TABLE reminder_entries ADD COLUMN repeat_days INTEGER',
-  'ALTER TABLE reminder_entries ADD COLUMN media_type TEXT'
+  'ALTER TABLE reminder_entries ADD COLUMN media_type TEXT',
+  'ALTER TABLE reminder_entries ADD COLUMN season_total_episodes INTEGER',
+  'ALTER TABLE reminder_entries ADD COLUMN air_weekdays TEXT'
 ] as const
 
 const INDEX_COMMANDS = [
@@ -329,6 +336,15 @@ export class DatabaseSchema {
     {
       version: 6,
       name: 'reminder-media-type',
+      up: async (db) => {
+        await this.executeIgnoreDuplicate(db, REMINDER_ENTRIES_TABLE_SQL)
+        await this.ensureReminderEntryColumns(db)
+        await this.ensureIndexes(db)
+      }
+    },
+    {
+      version: 7,
+      name: 'reminder-season-meta',
       up: async (db) => {
         await this.executeIgnoreDuplicate(db, REMINDER_ENTRIES_TABLE_SQL)
         await this.ensureReminderEntryColumns(db)

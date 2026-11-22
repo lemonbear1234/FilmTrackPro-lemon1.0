@@ -46,6 +46,7 @@
           {{ dayLabel }}
         </span>
       </div>
+      <p v-if="extraLabel" class="update-reminder-extra">{{ extraLabel }}</p>
       <p v-if="item.episode_name" class="update-reminder-name">{{ item.episode_name }}</p>
       <p v-else-if="item.notes" class="update-reminder-name">{{ item.notes }}</p>
     </div>
@@ -58,7 +59,7 @@ import { Pencil as PencilIcon, X as XIcon } from 'lucide-vue-next';
 import CachedImage from './ui/CachedImage.vue';
 import type { TVEpisodeReminder } from '../types';
 import { tmdbAPI } from '../utils/api';
-import { daysFromToday } from '../utils/date';
+import { daysFromToday, weekdayOfDate } from '../utils/date';
 
 const props = defineProps<{ item: TVEpisodeReminder }>();
 
@@ -100,11 +101,29 @@ const episodeLabel = computed(() => {
     const parts = [];
     if (season) parts.push(`第${season}季`);
     if (episode) parts.push(`第${episode}集`);
-    return parts.join(' · ');
+    const label = parts.join(' · ');
+    // 有总集数就一并给出「共 N 集」，一眼看出还剩几集
+    return props.item.total_episodes ? `${label} / 共 ${props.item.total_episodes} 集` : label;
   }
 
   if (mediaType === 'movie') return '上映日';
   return props.item.source === 'manual' ? '播出提醒' : '新集即将上线';
+});
+
+const WEEKDAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+/** 同一部剧 7 天内还有别的集（周一周二双更）：一张卡上提示，不再另开一张 */
+const extraLabel = computed(() => {
+  const extras = props.item.extra_airings ?? [];
+  if (extras.length === 0) return '';
+
+  const first = extras[0];
+  const sameDay = first.air_date === props.item.air_date;
+  const prefix = sameDay ? '同日还有' : '本周还有';
+  const weekday = sameDay ? '' : WEEKDAY_LABELS[weekdayOfDate(first.air_date) - 1] ?? '';
+  const episode = first.episode_number ? ` 第${first.episode_number}集` : '';
+  const more = extras.length > 1 ? ' 等' : '';
+  return `${prefix} ${extras.length} 集${more}${weekday ? ` · ${weekday}` : ''}${episode}`;
 });
 
 /** 已播出时给出「N 天前」，比单纯一个「已播出」更能说明新旧 */
@@ -119,6 +138,8 @@ const dayLabel = computed(() => {
   const days = Math.abs(diff);
   if (days === 1) return '已播出 · 昨天';
   if (days === 2) return '已播出 · 前天';
+  // 很早以前的条目（比如季数填错的老数据）不必精确到几千天
+  if (days > 60) return '已播出';
   return `已播出 · ${days} 天前`;
 });
 
@@ -274,6 +295,14 @@ const getRelativeDayLabel = (dateStr: string) => {
 .update-reminder-name {
   font-size: 0.78rem;
   color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.update-reminder-extra {
+  font-size: 0.72rem;
+  color: #7c3aed;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

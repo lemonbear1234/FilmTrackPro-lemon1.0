@@ -11,6 +11,7 @@ import type {
   TMDbResponse,
   TMDbMovie,
   TMDbMovieDetail,
+  TMDbSeasonDetail,
   ParsedMovie,
   ReplayRecord,
   ApiResponse,
@@ -434,6 +435,27 @@ export const tmdbAPI = {
     return this._request(
       `/tv/${tvId}`,
       { append_to_response: 'credits,images,videos,recommendations' },
+      cacheKey,
+      { bypassCache: options.forceRefresh }
+    );
+  },
+
+  // 获取某一季的整季集表（总集数、每集实际播出日都靠它，比 next_episode 精确）
+  async getTVSeasonDetails(
+    tvId: number,
+    seasonNumber: number,
+    options: { forceRefresh?: boolean } = {}
+  ): Promise<ApiResponse<TMDbSeasonDetail>> {
+    if (!tvId) return { success: false, error: '电视剧ID不能为空' };
+    if (!Number.isFinite(seasonNumber) || seasonNumber < 0) {
+      return { success: false, error: '季数不合法' };
+    }
+
+    const cacheKey = `tv_season_${tvId}_${seasonNumber}`;
+
+    return this._request(
+      `/tv/${tvId}/season/${seasonNumber}`,
+      {},
       cacheKey,
       { bypassCache: options.forceRefresh }
     );

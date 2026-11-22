@@ -244,7 +244,9 @@
             </div>
             <div>
               <h2 class="text-xl font-semibold text-gray-900">更新提醒</h2>
-              <p class="text-gray-500 text-sm">TMDb 未来 {{ reminderRange }} 天内的播出，加上你手动添加的提醒</p>
+              <p class="text-gray-500 text-sm">
+                {{ reminderRange >= 90 ? '全部' : `未来 ${reminderRange} 天` }}的播出 · 同一部剧只占一项
+              </p>
             </div>
           </div>
           <div class="flex items-center gap-2">
@@ -306,6 +308,16 @@
           @action="refreshReminders"
         />
 
+        <div
+          v-else-if="reminderGroups.length === 0 && reminderBeyondRange > 0"
+          class="reminder-empty-range"
+        >
+          <p class="font-medium text-gray-700">当前 {{ reminderRange >= 90 ? '全部' : `未来 ${reminderRange} 天` }}没有要更新的</p>
+          <p class="text-sm text-gray-500 mt-1">
+            另有 {{ reminderBeyondRange }} 条手动提醒在更远处，切到「全部」可以查看。
+          </p>
+        </div>
+
         <EmptyState
           v-else-if="reminderGroups.length === 0"
           tone="info"
@@ -342,6 +354,10 @@
               </div>
             </div>
           </div>
+
+          <p v-if="reminderBeyondRange > 0" class="reminder-beyond-hint">
+            另有 {{ reminderBeyondRange }} 条手动提醒在当前范围之外，切到「全部」可以查看
+          </p>
 
           <!-- 已播出：默认折叠，只保留最近一周，可一键清空 -->
           <div v-if="pastReminderItems.length > 0" class="reminder-past-section">
@@ -615,6 +631,7 @@ const {
   initializeData,
   reminderRange,
   reminderRangeOptions,
+  reminderBeyondRange,
   reminderMovieOptions,
   loadReminderMovieOptions,
   setReminderRange
@@ -707,6 +724,8 @@ const openEditReminder = async (item: TVEpisodeReminder) => {
     episodeName: base ? base.episode_name ?? null : item.episode_name ?? null,
     repeatDays: item.repeat_days ?? 0,
     mediaType: item.media_type ?? null,
+    totalEpisodes: item.total_episodes ?? null,
+    airWeekdays: item.air_weekdays ?? null,
     notes: item.notes ?? null
   }
   await loadReminderMovieOptions()
@@ -982,6 +1001,21 @@ onMounted(() => {
   font-size: 0.85rem;
   font-weight: 500;
   color: #334155;
+}
+
+.reminder-empty-range {
+  padding: 1.5rem;
+  border: 1px dashed rgba(226, 232, 240, 1);
+  border-radius: 0.85rem;
+  background: rgba(248, 250, 252, 0.7);
+  text-align: center;
+}
+
+.reminder-beyond-hint {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  text-align: center;
+  padding: 0.25rem 0;
 }
 
 .reminder-past-section {
