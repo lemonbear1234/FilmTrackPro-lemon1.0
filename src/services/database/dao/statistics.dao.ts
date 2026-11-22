@@ -29,6 +29,10 @@ const WATCH_EVENTS_CTE = `
     SELECT
       m.id AS movie_id,
       m.type AS media_type,
+      CASE
+        WHEN COALESCE(m.genres, '') LIKE '%"动漫"%' OR COALESCE(m.tags, '') LIKE '%"动漫"%'
+        THEN 1 ELSE 0
+      END AS is_anime,
       date(COALESCE(NULLIF(m.watched_date, ''), NULLIF(m.date_added, ''), m.created_at)) AS watch_day
     FROM movies m
     WHERE m.status = 'completed'
@@ -36,16 +40,20 @@ const WATCH_EVENTS_CTE = `
     SELECT
       r.movie_id AS movie_id,
       m.type AS media_type,
+      CASE
+        WHEN COALESCE(m.genres, '') LIKE '%"动漫"%' OR COALESCE(m.tags, '') LIKE '%"动漫"%'
+        THEN 1 ELSE 0
+      END AS is_anime,
       date(r.watch_date) AS watch_day
     FROM replay_records r
     JOIN movies m ON m.id = r.movie_id
     WHERE r.watch_date IS NOT NULL AND r.watch_date <> ''
   ),
   distinct_events AS (
-    SELECT movie_id, media_type, watch_day
+    SELECT movie_id, media_type, is_anime, watch_day
     FROM watch_events
     WHERE watch_day IS NOT NULL
-    GROUP BY movie_id, media_type, watch_day
+    GROUP BY movie_id, media_type, is_anime, watch_day
   )
 `
 
@@ -96,16 +104,16 @@ export class StatisticsDAO {
           (SELECT COUNT(*) FROM movies WHERE type = 'tv') AS total_tv_count,
           (SELECT COUNT(DISTINCT CASE WHEN media_type = 'movie' THEN movie_id END)
              FROM distinct_events
-             WHERE watch_day >= date('now', 'start of month')) AS movies_this_month_movie,
-          (SELECT COUNT(DISTINCT CASE WHEN media_type = 'tv' THEN movie_id END)
+             WHERE watch_day >= date('now', 'localtime', 'start of month')) AS movies_this_month_movie,
+          (SELECT COUNT(DISTINCT CASE WHEN media_type = 'tv' AND is_anime = 0 THEN movie_id END)
              FROM distinct_events
-             WHERE watch_day >= date('now', 'start of month')) AS movies_this_month_tv,
+             WHERE watch_day >= date('now', 'localtime', 'start of month')) AS movies_this_month_tv,
           (SELECT COUNT(DISTINCT CASE WHEN media_type = 'movie' THEN movie_id END)
              FROM distinct_events
-             WHERE watch_day >= date('now', 'start of year')) AS movies_this_year_movie,
-          (SELECT COUNT(DISTINCT CASE WHEN media_type = 'tv' THEN movie_id END)
+             WHERE watch_day >= date('now', 'localtime', 'start of year')) AS movies_this_year_movie,
+          (SELECT COUNT(DISTINCT CASE WHEN media_type = 'tv' AND is_anime = 0 THEN movie_id END)
              FROM distinct_events
-             WHERE watch_day >= date('now', 'start of year')) AS movies_this_year_tv,
+             WHERE watch_day >= date('now', 'localtime', 'start of year')) AS movies_this_year_tv,
           (SELECT COALESCE(SUM(duration), 0) FROM replay_records) AS total_watch_minutes
       `
 
@@ -149,7 +157,7 @@ export class StatisticsDAO {
           COUNT(DISTINCT CASE WHEN media_type = 'movie' THEN movie_id END) AS movie_count,
           COUNT(DISTINCT CASE WHEN media_type = 'tv' THEN movie_id END) AS tv_count
         FROM distinct_events
-        WHERE watch_day >= date('now', 'start of month', '-11 months')
+        WHERE watch_day >= date('now', 'localtime', 'start of month', '-11 months')
         GROUP BY strftime('%Y-%m', watch_day)
         ORDER BY month
       `
