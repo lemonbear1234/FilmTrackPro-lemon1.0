@@ -384,7 +384,13 @@ export const useMovieStore = defineStore('movie', () => {
     }
   ): Promise<ApiResponse<ParsedMovie>> => {
     try {
-      const response = await databaseAPI.updateMovieExtraInfo(id, patch);
+      // 加超时兜底：数据库调用若一直不返回，界面不能永远卡在「保存中…」
+      const response = await Promise.race([
+        databaseAPI.updateMovieExtraInfo(id, patch),
+        new Promise<never>((_, reject) =>
+          window.setTimeout(() => reject(new Error('保存超时，请重试')), 8000)
+        )
+      ]);
       if (response.success && response.data) {
         upsertMovieInState(response.data);
         return { success: true, data: response.data as ParsedMovie };

@@ -575,6 +575,18 @@ export class MovieDAO {
       if (!row) {
         return { success: false, error: '更新后未能读回记录，请刷新后重试' }
       }
+
+      // 兜底：WHERE 没匹配到行时 UPDATE 不报错，但数据其实没变，必须显式判定失败
+      const changed =
+        (patch.created_at === undefined || (row.created_at ?? null) === patch.created_at) &&
+        (patch.total_seasons === undefined || (row.total_seasons ?? null) === patch.total_seasons) &&
+        (patch.total_episodes === undefined || (row.total_episodes ?? null) === patch.total_episodes) &&
+        (patch.runtime === undefined || (row.runtime ?? null) === patch.runtime) &&
+        (patch.tmdb_id === undefined || (row.tmdb_id ?? null) === patch.tmdb_id)
+
+      if (!changed) {
+        return { success: false, error: '数据库没有接受这次修改，请刷新后重试' }
+      }
       return {
         success: true,
         data: {

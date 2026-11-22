@@ -6,7 +6,7 @@
   -->
   <Teleport to="body">
     <TransitionRoot appear :show="isOpen" as="template">
-      <Dialog as="div" @close="closeModal" class="relative z-50">
+      <Dialog as="div" @close="closeModal" class="relative z-[10000]">
         <TransitionChild
           as="template"
           enter="duration-300 ease-out"
@@ -73,6 +73,7 @@
                 </div>
 
                 <div
+                  v-if="!hideFooter"
                   :class="[
                     'flex shrink-0 justify-end space-x-3 border-t border-gray-100 bg-white px-6 py-4',
                     props.footerClass,
@@ -132,6 +133,7 @@ const props = withDefaults(defineProps<Props>(), {
   showCancel: false,
   large: false,
   confirmDisabled: false,
+  hideFooter: false,
 });
 
 const emit = defineEmits<Emits>();

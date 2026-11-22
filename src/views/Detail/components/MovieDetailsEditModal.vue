@@ -4,16 +4,13 @@
     type="info"
     title="修改详细信息"
     message=""
-    :show-cancel="true"
-    :confirm-disabled="saving"
-    :confirm-text="saving ? '保存中…' : '保存'"
-    cancel-text="取消"
+    :show-cancel="false"
+    :hide-footer="true"
     @close="$emit('close')"
     @cancel="$emit('close')"
-    @confirm="handleSave"
   >
     <template #content>
-      <div class="space-y-4">
+      <div class="space-y-4" @keydown.enter.prevent="handleSave">
         <!-- 添加日期 -->
         <label class="block">
           <span class="mb-1.5 block text-sm font-medium text-gray-700">添加日期</span>
@@ -83,13 +80,33 @@
         >
           {{ errorMessage }}
         </p>
+
+        <!-- 底部操作区：直接绑定保存，不再经 Modal 的 confirm 事件中转 -->
+        <div class="flex items-center justify-end gap-3 border-t border-gray-100 pt-4">
+          <button
+            type="button"
+            class="inline-flex justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+            :disabled="isBusy"
+            @click="$emit('close')"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            class="inline-flex justify-center rounded-xl border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="isBusy"
+            @click="handleSave"
+          >
+            {{ isBusy ? '保存中…' : '保存' }}
+          </button>
+        </div>
       </div>
     </template>
   </Modal>
 </template>
 
 <script setup lang="ts">
-import { reactive, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import Modal from '../../../components/ui/Modal.vue';
 import type { Movie } from '../../../types';
 import type { MovieDetailsExtraPatch } from '../types';
@@ -114,6 +131,10 @@ const form = reactive({
   tmdbId: ''
 });
 
+// 点击瞬间立即置位，保证「点了有没有反应」一眼可见
+const localBusy = ref(false);
+const isBusy = computed(() => localBusy.value || props.saving);
+
 const toDateInput = (value?: string | null) => {
   if (!value) return '';
   const text = String(value);
@@ -135,7 +156,10 @@ const resetForm = () => {
 watch(
   () => props.isOpen,
   (open) => {
-    if (open) resetForm();
+    if (open) {
+      localBusy.value = false;
+      resetForm();
+    }
   },
   { immediate: true }
 );
@@ -147,6 +171,14 @@ watch(
   }
 );
 
+// 父组件保存结束后解除本地占用
+watch(
+  () => props.saving,
+  (value) => {
+    if (!value) localBusy.value = false;
+  }
+);
+
 const parseNumber = (value: string): number | null => {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -155,19 +187,30 @@ const parseNumber = (value: string): number | null => {
 };
 
 const handleSave = () => {
-  if (props.saving) return;
+  if (isBusy.value) return;
 
-  // 日期统一存成 ISO 字符串（本地中午，避免时区把日期推前一天）
-  const createdAt = form.createdAt
-    ? new Date(`${form.createdAt}T12:00:00`).toISOString()
-    : null;
+  localBusy.value = true;
+  // 兜底：父组件若没有回应，3 秒后恢复按钮，避免永久卡在「保存中…」
+  window.setTimeout(() => {
+    localBusy.value = false;
+  }, 3000);
 
-  emit('save', {
-    created_at: createdAt,
-    total_seasons: parseNumber(form.totalSeasons),
-    total_episodes: parseNumber(form.totalEpisodes),
-    runtime: parseNumber(form.runtime),
-    tmdb_id: parseNumber(form.tmdbId)
-  });
+  try {
+    // 日期统一存成 ISO 字符串（本地中午，避免时区把日期推前一天）
+    const createdAt = form.createdAt
+      ? new Date(`${form.createdAt}T12:00:00`).toISOString()
+      : null;
+
+    emit('save', {
+      created_at: createdAt,
+      total_seasons: parseNumber(form.totalSeasons),
+      total_episodes: parseNumber(form.totalEpisodes),
+      runtime: parseNumber(form.runtime),
+      tmdb_id: parseNumber(form.tmdbId)
+    });
+  } catch (error) {
+    localBusy.value = false;
+    console.error('构造保存数据失败:', error);
+  }
 };
 </script>

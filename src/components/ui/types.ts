@@ -17,6 +17,8 @@ export interface ModalProps {
   panelClass?: string;
   contentClass?: string;
   footerClass?: string;
+  /** 隐藏内置底部按钮区（由使用方在内容里自己画按钮） */
+  hideFooter?: boolean;
 }
 
 export interface ModalEmits {
