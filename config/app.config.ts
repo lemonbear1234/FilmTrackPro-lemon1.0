@@ -15,13 +15,16 @@ export const APP_CONFIG = {
     // 优先读取构建期注入的环境变量 VITE_TMDB_API_KEY。
     // 注意：仓库内的默认 Key 已随历史提交泄露，正式发布前应在 TMDb 控制台轮换并改用环境变量注入。
     apiKey: (import.meta.env?.VITE_TMDB_API_KEY as string | undefined) || '06e492fa8930c108b57945b4fda6f397',
-    baseUrl: 'https://api.themoviedb.org/3',
+    // api.themoviedb.org 在部分网络下会被阻断（表现为长时间无响应），
+    // api.tmdb.org 是官方备用域名，接口与参数完全一致，实测响应稳定。
+    baseUrl: 'https://api.tmdb.org/3',
+    fallbackBaseUrls: ['https://api.themoviedb.org/3'],
     imageBaseUrl: 'https://image.tmdb.org/t/p',
     // API请求配置
     request: {
       interval: 60, // 请求起跑最小间隔（毫秒）；配合并发与 429 退避，吞吐约 16 req/s，仍远低于 TMDb 限流
       maxConcurrent: 4, // 最大并发请求数
-      timeout: 10000, // 请求超时，毫秒
+      timeout: 8000, // 请求超时，毫秒；超过即判定该域名不可用并切换备用域名
       retries: 3, // 重试次数
       cacheTimeInHours: 24, // API缓存时长（小时）
     },

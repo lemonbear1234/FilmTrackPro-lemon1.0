@@ -40,11 +40,69 @@ export type TMDbSearchResponse = TMDbResponse<TMDbMovie>;
 // 创建TMDb API客户端实例
 const tmdbClient = axios.create({
   baseURL: APP_CONFIG.tmdb.baseUrl,
+  timeout: APP_CONFIG.tmdb.request.timeout,
   params: {
     api_key: APP_CONFIG.tmdb.apiKey,
     language: 'zh-CN',
   },
 });
+
+// ==================== TMDb 域名容灾 ====================
+// api.themoviedb.org 在部分网络下会被阻断，症状是请求挂住直到超时；
+// api.tmdb.org 是官方备用域名，接口与参数完全一致。
+// 只有「连不上」才换域名：收到 4xx/5xx 说明域名是通的，交给上层逻辑处理（比如 429 退避）。
+const TMDB_BASE_URLS: readonly string[] = [
+  APP_CONFIG.tmdb.baseUrl,
+  ...APP_CONFIG.tmdb.fallbackBaseUrls,
+];
+const TMDB_HOST_STORAGE_KEY = 'filmtrack:tmdb-base-url';
+
+const readStoredBaseUrl = (): string | null => {
+  try {
+    const saved = window.localStorage.getItem(TMDB_HOST_STORAGE_KEY);
+    return saved && TMDB_BASE_URLS.includes(saved) ? saved : null;
+  } catch {
+    return null;
+  }
+};
+
+// 上次跑通的域名优先，避免每次启动都先撞一遍被墙的地址
+let activeBaseUrl: string = readStoredBaseUrl() ?? TMDB_BASE_URLS[0];
+
+const rememberBaseUrl = (baseUrl: string): void => {
+  if (activeBaseUrl === baseUrl) return;
+  activeBaseUrl = baseUrl;
+  try {
+    window.localStorage.setItem(TMDB_HOST_STORAGE_KEY, baseUrl);
+  } catch {
+    // 隐私模式下写不进去，本次会话内依然生效
+  }
+};
+
+/** 有 HTTP 响应就说明域名可达，网络层错误才算不可达 */
+const hasHttpResponse = (error: unknown): boolean =>
+  axios.isAxiosError(error) && Boolean(error.response);
+
+async function tmdbGet<T>(endpoint: string, params: Record<string, unknown> = {}) {
+  const candidates = [activeBaseUrl, ...TMDB_BASE_URLS.filter((url) => url !== activeBaseUrl)];
+  let lastError: unknown;
+
+  for (const baseUrl of candidates) {
+    try {
+      const response = await tmdbClient.get<T>(endpoint, { params, baseURL: baseUrl });
+      rememberBaseUrl(baseUrl);
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (hasHttpResponse(error)) {
+        throw error;
+      }
+      console.warn(`TMDb 域名无响应，切换备用域名：${baseUrl}`);
+    }
+  }
+
+  throw lastError;
+}
 
 // ==================== TMDb API 请求队列 ====================
 
@@ -236,7 +294,7 @@ export const tmdbAPI = {
 
     return tmdbQueue.add(queueKey, async () => {
       try {
-        const response = await requestWithRateLimitRetry(() => tmdbClient.get(endpoint, { params }));
+        const response = await requestWithRateLimitRetry(() => tmdbGet<T>(endpoint, params));
         const result = { success: true, data: response.data };
 
         // 缓存结果
@@ -530,10 +588,10 @@ export const tmdbAPI = {
     return tmdbQueue.add(cacheKey, async () => {
       try {
         const endpoint = `/${mediaType}/${tmdbId}/images`;
-        const response = await requestWithRateLimitRetry(() => tmdbClient.get(endpoint, {
-          params: {
-            include_image_language: 'zh,null',
-          },
+        const response = await requestWithRateLimitRetry(() => tmdbGet<{
+          backdrops?: Array<{ file_path: string; vote_average: number }>;
+        }>(endpoint, {
+          include_image_language: 'zh,null',
         }));
         const data = response.data;
 
